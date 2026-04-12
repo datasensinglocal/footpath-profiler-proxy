@@ -1,17 +1,9 @@
 """
 Footpath Profiler — Drive Upload Proxy
-=======================================
-Receives base64 images from the browser app and uploads them to Google Drive
-using a service account. No OAuth needed for field surveyors.
-
-Environment variables required (set in Render dashboard):
-  GOOGLE_SERVICE_ACCOUNT_JSON   Full JSON content of your service account key file
-  DRIVE_FOLDER_ID               Google Drive folder ID to upload images into
-  ALLOWED_ORIGIN                Your app's origin, e.g. * or https://yoursite.com
 """
 
 import os, json, base64, tempfile, logging
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
@@ -19,93 +11,76 @@ from googleapiclient.http import MediaFileUpload
 logging.basicConfig(level=logging.INFO)
 app = Flask(__name__)
 
-SCOPES        = ['https://www.googleapis.com/auth/drive.file']
-FOLDER_ID     = os.environ.get('DRIVE_FOLDER_ID', '1TJ3DiFYcMVRyX58CAh0LN5ZlEhyvXQXX')
-ALLOWED_ORIGIN = os.environ.get('ALLOWED_ORIGIN', '*')
+SCOPES    = ['https://www.googleapis.com/auth/drive.file']
+FOLDER_ID = os.environ.get('DRIVE_FOLDER_ID', '1TJ3DiFYcMVRyX58CAh0LN5ZlEhyvXQXX')
 
 
-def get_drive_service():
+def drive_service():
     raw = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON')
     if not raw:
-        raise RuntimeError('GOOGLE_SERVICE_ACCOUNT_JSON environment variable not set')
-    info = json.loads(raw)
-    creds = service_account.Credentials.from_service_account_info(info, scopes=SCOPES)
+        raise RuntimeError('GOOGLE_SERVICE_ACCOUNT_JSON not set')
+    creds = service_account.Credentials.from_service_account_info(
+        json.loads(raw), scopes=SCOPES)
     return build('drive', 'v3', credentials=creds)
 
 
-def cors(response):
-    response.headers['Access-Control-Allow-Origin']  = ALLOWED_ORIGIN
-    response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
-    return response
+def cors_response(data, status=200):
+    resp = make_response(jsonify(data), status)
+    resp.headers['Access-Control-Allow-Origin']  = '*'
+    resp.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    resp.headers['Access-Control-Allow-Headers'] = '*'
+    return resp
 
 
-@app.after_request
-def add_cors(response):
-    return cors(response)
+# Handle preflight OPTIONS for every route
+@app.before_request
+def handle_options():
+    if request.method == 'OPTIONS':
+        resp = make_response('', 204)
+        resp.headers['Access-Control-Allow-Origin']  = '*'
+        resp.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+        resp.headers['Access-Control-Allow-Headers'] = '*'
+        return resp
 
 
-@app.route('/ping', methods=['GET', 'OPTIONS'])
+@app.route('/ping', methods=['GET', 'POST'])
 def ping():
-    return jsonify({'ok': True, 'message': 'Footpath Profiler image proxy running'})
-
-
-@app.route('/upload', methods=['OPTIONS'])
-def upload_preflight():
-    return cors(jsonify({'ok': True}))
+    return cors_response({'ok': True, 'message': 'Footpath Profiler proxy running'})
 
 
 @app.route('/upload', methods=['POST'])
 def upload():
     try:
-        payload = request.get_json(force=True)
+        payload = request.get_json(force=True, silent=True) or {}
         name    = payload.get('name', 'image.jpg')
-        data    = payload.get('data')          # base64 string (no data: prefix)
+        data    = payload.get('data')
         folder  = payload.get('folderId', FOLDER_ID)
 
         if not data:
-            return jsonify({'ok': False, 'error': 'No image data provided'}), 400
+            return cors_response({'ok': False, 'error': 'No image data'}, 400)
 
-        # Decode base64 → temp file
         image_bytes = base64.b64decode(data)
-        suffix = '.jpg' if name.endswith('.jpg') else '.png'
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp:
             tmp.write(image_bytes)
             tmp_path = tmp.name
 
         try:
-            service = get_drive_service()
-            file_metadata = {
-                'name': name,
-                'parents': [folder]
-            }
+            svc  = drive_service()
+            meta = {'name': name, 'parents': [folder]}
             media = MediaFileUpload(tmp_path, mimetype='image/jpeg', resumable=False)
-            uploaded = service.files().create(
-                body=file_metadata,
-                media_body=media,
-                fields='id, webViewLink'
-            ).execute()
-
-            # Make file viewable by anyone with the link
-            service.permissions().create(
-                fileId=uploaded['id'],
+            f = svc.files().create(body=meta, media_body=media, fields='id,webViewLink').execute()
+            svc.permissions().create(
+                fileId=f['id'],
                 body={'type': 'anyone', 'role': 'reader'}
             ).execute()
-
-            logging.info(f"Uploaded {name} → {uploaded['id']}")
-            return jsonify({
-                'ok':   True,
-                'id':   uploaded['id'],
-                'url':  uploaded.get('webViewLink', ''),
-                'name': name
-            })
-
+            logging.info(f"Uploaded {name} -> {f['id']}")
+            return cors_response({'ok': True, 'id': f['id'], 'url': f.get('webViewLink',''), 'name': name})
         finally:
             os.unlink(tmp_path)
 
     except Exception as e:
         logging.error(f"Upload error: {e}")
-        return jsonify({'ok': False, 'error': str(e)}), 500
+        return cors_response({'ok': False, 'error': str(e)}, 500)
 
 
 if __name__ == '__main__':
