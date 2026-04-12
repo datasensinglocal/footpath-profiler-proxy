@@ -702,7 +702,7 @@ td.hi{color:white;font-weight:700;}
 
     <div style="margin-bottom:18px;">
       <div class="sec-lbl" style="margin-bottom:8px;">Google Account <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;">(for image upload)</span></div>
-      <div id="google-auth-status" style="font-size:12px;color:var(--muted);margin-bottom:8px;">Not signed in — images won't upload to Drive</div>
+      <div id="google-auth-status" style="font-size:12px;color:var(--muted);margin-bottom:8px;">Not signed in — sign in with Google in Settings</div>
       <button onclick="signInWithGoogle()" id="google-signin-btn" style="
         background:#4285f4;color:white;border:none;border-radius:8px;
         padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer;
@@ -1430,33 +1430,35 @@ async function submitRecord() {
     // ── Step 2: Upload images to Drive via Render proxy ──
     if (rowOk) {
       var rawSnap = S.rawImgB64, annSnap = annotatedB64;
-      if (IMAGE_SERVER_URL) {
-        setStatus('Row saved ✓ — uploading images to Drive…', 'ok');
-        ;(async function() {
-          try {
-            var rawC = rawSnap  ? await compressImage(rawSnap,  800, 0.82) : null;
-            var annC = annSnap  ? await compressImage(annSnap,  800, 0.82) : null;
-            var uploaded = 0;
-            if (rawC) {
-              await uploadImageToServer(IMAGE_SERVER_URL, imgName + '_raw.jpg', rawC.split(',')[1]);
-              uploaded++;
-            }
-            if (annC) {
-              await uploadImageToServer(IMAGE_SERVER_URL, imgName + '_annotated.jpg', annC.split(',')[1]);
-              uploaded++;
-            }
-            setStatus('Saved ✓ — ' + uploaded + ' image(s) uploaded to Drive', 'ok');
-            hideDownloadBanner();
-          } catch(imgErr) {
-            setStatus('Row saved ✓ — image upload failed: ' + imgErr.message, 'err');
+      ;(async function() {
+        try {
+          var rawC = rawSnap ? await compressImage(rawSnap, 800, 0.82) : null;
+          var annC = annSnap ? await compressImage(annSnap, 800, 0.82) : null;
+          var uploaded = 0;
+
+          if (gAccessToken) {
+            // Direct Drive upload via Google OAuth (primary)
+            setStatus('Row saved ✓ — uploading to Drive…', 'ok');
+            if (rawC) { await uploadImageToDrive(imgName+'_raw.jpg', rawC.split(',')[1]); uploaded++; }
+            if (annC) { await uploadImageToDrive(imgName+'_annotated.jpg', annC.split(',')[1]); uploaded++; }
+          } else if (IMAGE_SERVER_URL) {
+            // Proxy server fallback
+            setStatus('Row saved ✓ — uploading via server…', 'ok');
+            if (rawC) { await uploadImageToServer(IMAGE_SERVER_URL, imgName+'_raw.jpg', rawC.split(',')[1]); uploaded++; }
+            if (annC) { await uploadImageToServer(IMAGE_SERVER_URL, imgName+'_annotated.jpg', annC.split(',')[1]); uploaded++; }
+          } else {
             showDownloadBanner(rawSnap, annSnap, imgName);
+            setStatus('Row saved ✓ — sign in with Google in ⚙ Settings to auto-upload images', '');
+            return;
           }
-        })();
-      } else {
-        // No image server configured — download to device as fallback
-        setStatus('Row saved ✓ — images downloading to device', 'ok');
-        setTimeout(function() { showDownloadBanner(rawSnap, annSnap, imgName); }, 600);
-      }
+
+          setStatus('Saved ✓ — ' + uploaded + ' image(s) uploaded to Drive', 'ok');
+          hideDownloadBanner();
+        } catch(imgErr) {
+          setStatus('Row saved ✓ — image upload failed: ' + imgErr.message, 'err');
+          showDownloadBanner(rawSnap, annSnap, imgName);
+        }
+      })();
     }
   } else {
     setStatus('Saved locally — add Apps Script URL in ⚙ Settings to sync', '');
@@ -1670,31 +1672,23 @@ function updateGoogleAuthStatus() {
     if (btn) btn.textContent = 'Re-authenticate';
   } else {
     el.style.color = 'var(--muted)';
-    el.textContent = 'Not signed in — images won't upload to Drive';
+    el.textContent = "Not signed in — sign in with Google in Settings";
   }
 }
 
 function uploadImageToDrive(name, base64data) {
-  if (!gAccessToken) throw new Error('Not authenticated with Google');
-  var boundary = 'fp_boundary_' + Date.now();
+  if (!gAccessToken) throw new Error('Not signed in with Google');
+  var CRLF = '\r\n';
+  var boundary = 'fp_' + Date.now();
   var metadata = JSON.stringify({ name: name, parents: [DRIVE_FOLDER_ID] });
-  var imageBytes = atob(base64data);
-  var body = '--' + boundary + '
-'
-    + 'Content-Type: application/json
-
-'
-    + metadata + '
-'
-    + '--' + boundary + '
-'
-    + 'Content-Type: image/jpeg
-'
-    + 'Content-Transfer-Encoding: base64
-
-'
-    + base64data + '
-'
+  // Build multipart body with correct CRLF line endings
+  var body = '--' + boundary + CRLF
+    + 'Content-Type: application/json; charset=UTF-8' + CRLF + CRLF
+    + metadata + CRLF
+    + '--' + boundary + CRLF
+    + 'Content-Type: image/jpeg' + CRLF
+    + 'Content-Transfer-Encoding: base64' + CRLF + CRLF
+    + base64data + CRLF
     + '--' + boundary + '--';
 
   return fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink', {
@@ -1706,17 +1700,22 @@ function uploadImageToDrive(name, base64data) {
     body: body
   })
   .then(function(r) {
-    if (r.status === 401) { gAccessToken = null; updateGoogleAuthStatus(); throw new Error('Token expired — please sign in again via ⚙ Settings'); }
-    if (!r.ok) return r.text().then(function(t){ throw new Error('Drive API: ' + r.status + ' ' + t); });
+    if (r.status === 401) {
+      gAccessToken = null;
+      updateGoogleAuthStatus();
+      throw new Error('Google token expired — tap ⚙ Settings → Sign in again');
+    }
+    if (!r.ok) return r.text().then(function(t) { throw new Error('Drive error ' + r.status + ': ' + t); });
     return r.json();
   })
   .then(function(d) {
-    // Make public
-    return fetch('https://www.googleapis.com/drive/v3/files/' + d.id + '/permissions', {
+    // Make file public so it can be linked from the sheet
+    fetch('https://www.googleapis.com/drive/v3/files/' + d.id + '/permissions', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + gAccessToken, 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'anyone', role: 'reader' })
-    }).then(function() { return d; });
+    });
+    return d;
   });
 }
 
