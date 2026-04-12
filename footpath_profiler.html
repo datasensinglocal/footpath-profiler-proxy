@@ -1,113 +1,1698 @@
-"""
-Footpath Profiler — Drive Upload Proxy
-=======================================
-Receives base64 images from the browser app and uploads them to Google Drive
-using a service account. No OAuth needed for field surveyors.
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Footpath Profiler — Sensing Local</title>
+<style>
+:root {
+  --bg:#0c1220; --surface:#162032; --surface2:#1e2d42; --border:#253449;
+  --building:#f59e0b; --kerb:#2dd4bf; --vp:#10b981;
+  --text:#f0f4f8; --muted:#6b84a0; --faint:#253449;
+  --yellow:#fde047; --accent:#3b82f6; --accent2:#6366f1;
+  --danger:#ef4444; --success:#22c55e; --warn:#f59e0b;
+  --r:12px; --r-sm:8px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html{scroll-behavior:smooth;}
+body{
+  font-family:'SF Pro Display',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  background:#060d1a;color:var(--text);
+  overscroll-behavior:contain;min-height:100vh;
+}
+.page{
+  max-width:500px;margin:0 auto;min-height:100vh;
+  background:var(--bg);display:flex;flex-direction:column;
+  position:relative;
+}
+.page.hidden{display:none;}
 
-Environment variables required (set in Render dashboard):
-  GOOGLE_SERVICE_ACCOUNT_JSON   Full JSON content of your service account key file
-  DRIVE_FOLDER_ID               Google Drive folder ID to upload images into
-  ALLOWED_ORIGIN                Your app's origin, e.g. * or https://yoursite.com
-"""
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
 
-import os, json, base64, tempfile, logging
-from flask import Flask, request, jsonify
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
+/* ══════════════════ LOGIN PAGE ══════════════════ */
+.login-bg{
+  position:absolute;inset:0;pointer-events:none;overflow:hidden;
+}
+.login-bg::before{
+  content:'';position:absolute;top:-80px;left:-80px;
+  width:400px;height:400px;border-radius:50%;
+  background:radial-gradient(circle,rgba(59,130,246,0.12) 0%,transparent 70%);
+}
+.login-bg::after{
+  content:'';position:absolute;bottom:-60px;right:-40px;
+  width:300px;height:300px;border-radius:50%;
+  background:radial-gradient(circle,rgba(16,185,129,0.08) 0%,transparent 70%);
+}
+.login-wrap{
+  flex:1;display:flex;flex-direction:column;
+  padding:36px 24px 32px;gap:20px;position:relative;z-index:1;
+}
+.login-logo{padding:16px 0 12px;}
+.login-logo .eyebrow{
+  font-size:11px;font-weight:600;letter-spacing:2px;
+  color:var(--muted);text-transform:uppercase;margin-bottom:10px;
+}
+.login-logo h1{
+  font-size:28px;font-weight:800;letter-spacing:-0.5px;
+  line-height:1.2;
+}
+.login-logo h1 span{color:var(--accent);}
+.login-logo p{color:var(--muted);font-size:13px;margin-top:6px;}
 
-logging.basicConfig(level=logging.INFO)
-app = Flask(__name__)
+.form-group{display:flex;flex-direction:column;gap:6px;}
+.form-label{
+  font-size:11px;font-weight:600;color:var(--muted);
+  text-transform:uppercase;letter-spacing:0.8px;
+}
+.form-input,.form-select{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r);padding:13px 14px;color:var(--text);
+  font-size:15px;width:100%;outline:none;
+  transition:border-color 0.2s;-webkit-appearance:none;
+  font-family:inherit;
+}
+.form-input:focus,.form-select:focus{border-color:var(--accent);}
+.form-select option{background:var(--surface);}
+.form-hint{font-size:11px;color:var(--muted);margin-top:2px;}
+.form-row{display:flex;gap:10px;}
+.form-row .form-group{flex:1;}
 
-SCOPES        = ['https://www.googleapis.com/auth/drive.file']
-FOLDER_ID     = os.environ.get('DRIVE_FOLDER_ID', '1TJ3DiFYcMVRyX58CAh0LN5ZlEhyvXQXX')
-ALLOWED_ORIGIN = os.environ.get('ALLOWED_ORIGIN', '*')
+.btn-primary{
+  background:var(--accent);color:white;border:none;
+  border-radius:var(--r);padding:15px;font-size:16px;
+  font-weight:700;cursor:pointer;width:100%;
+  touch-action:manipulation;font-family:inherit;
+  transition:opacity 0.15s,transform 0.1s;
+  letter-spacing:0.2px;
+}
+.btn-primary:active{opacity:0.85;transform:scale(0.99);}
+
+.divider{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;}
+.divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* ══════════════════ MAIN PAGE ══════════════════ */
+.main-hdr{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 16px;border-bottom:1px solid var(--border);
+  flex-shrink:0;background:var(--bg);position:sticky;top:0;z-index:10;
+}
+.hdr-left{display:flex;flex-direction:column;}
+.hdr-brand{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;}
+.hdr-user{font-size:14px;font-weight:700;color:var(--text);}
+.hdr-actions{display:flex;gap:8px;}
+.icon-btn-sm{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-sm);padding:8px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  touch-action:manipulation;transition:background 0.15s;
+  color:var(--muted);
+}
+.icon-btn-sm:active{background:var(--surface2);}
+.icon-btn-sm.active{background:rgba(59,130,246,0.15);border-color:var(--accent);color:var(--accent);}
+
+/* ── IMAGE AREA ── */
+.vwrap{
+  position:relative;width:94%;margin:12px auto;
+  background:#020817;border-radius:var(--r);overflow:hidden;
+  border:1px solid var(--border);flex-shrink:0;touch-action:none;
+}
+#svg{display:block;touch-action:none;width:100%;height:auto;}
+.empty{
+  min-height:280px;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  color:var(--muted);gap:18px;
+}
+.upload-btns{display:flex;gap:10px;}
+.upload-btn{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r);padding:12px 18px;font-size:14px;
+  color:var(--text);cursor:pointer;display:flex;
+  align-items:center;gap:7px;touch-action:manipulation;
+  font-weight:600;font-family:inherit;transition:background 0.15s;
+}
+.upload-btn:active{background:var(--surface2);}
+.img-actions{
+  position:absolute;top:10px;left:10px;
+  display:flex;gap:6px;pointer-events:auto;
+}
+.pill-btn{
+  background:rgba(12,18,32,0.88);backdrop-filter:blur(8px);
+  border:1px solid var(--border);border-radius:20px;
+  padding:6px 12px;font-size:12px;color:var(--muted);
+  cursor:pointer;touch-action:manipulation;
+  display:flex;align-items:center;gap:5px;
+  font-family:inherit;transition:color 0.15s;
+}
+.pill-btn:active{color:var(--text);}
+.ovr{
+  position:absolute;bottom:10px;right:10px;
+  display:flex;align-items:center;gap:8px;pointer-events:none;
+}
+.icon-btn{
+  background:rgba(30,45,66,0.9);backdrop-filter:blur(6px);
+  border-radius:var(--r-sm);padding:8px;pointer-events:auto;
+  cursor:pointer;display:flex;border:1px solid rgba(255,255,255,0.1);
+  touch-action:manipulation;
+}
+.side-tag{
+  background:white;color:#0c1220;border-radius:var(--r-sm);
+  padding:5px 12px;font-weight:800;font-size:15px;
+}
+.hint{text-align:center;font-size:11px;color:var(--muted);padding:4px 0 2px;}
+
+/* ── MEASUREMENT ── */
+.ftr{padding:10px 18px 0;display:flex;flex-direction:column;gap:8px;}
+.ftr-r1{display:flex;align-items:center;justify-content:space-between;}
+.flbl{color:var(--muted);font-size:13px;font-weight:500;}
+.vpill{
+  background:var(--surface);border-radius:24px;
+  padding:6px 20px;border:1px solid var(--border);
+}
+.vval{font-size:26px;font-weight:800;color:white;font-family:monospace;}
+.ftr-r2{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.ngrp{display:flex;gap:8px;}
+.nbtn{
+  background:var(--surface);border:1px solid var(--border);
+  width:40px;height:40px;border-radius:var(--r-sm);
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;touch-action:manipulation;
+}
+.nbtn:active{opacity:0.7;}
+.cal-badge{
+  font-size:11px;color:var(--muted);
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:20px;padding:4px 10px;cursor:pointer;
+}
+.cal-badge.calibrated{color:var(--success);border-color:rgba(34,197,94,0.3);}
+
+/* ── MATERIALS ── */
+.mat-sec{padding:14px 18px 0;}
+.sec-lbl{
+  font-size:10px;font-weight:700;color:var(--muted);
+  text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;
+}
+.mat-grid{display:flex;gap:10px;}
+.mat-item{
+  flex:1;display:flex;flex-direction:column;align-items:center;
+  gap:6px;cursor:pointer;touch-action:manipulation;
+}
+.mat-thumb{
+  width:56px;height:56px;border-radius:10px;
+  border:2px solid var(--border);overflow:hidden;
+  transition:border-color 0.15s,box-shadow 0.15s;
+}
+.mat-item.sel .mat-thumb{
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px rgba(59,130,246,0.25);
+}
+.mat-name{font-size:11px;color:var(--muted);font-weight:600;text-align:center;}
+.mat-item.sel .mat-name{color:var(--accent);}
+
+/* ── SUBMIT ── */
+.submit-sec{padding:14px 18px 16px;}
+.btn-submit{
+  background:var(--text);color:#0c1220;border:none;
+  border-radius:var(--r);padding:14px;font-size:15px;
+  font-weight:800;cursor:pointer;touch-action:manipulation;
+  width:100%;font-family:inherit;letter-spacing:0.3px;
+  transition:opacity 0.15s,transform 0.1s;
+}
+.btn-submit:disabled{opacity:0.4;cursor:not-allowed;}
+.btn-submit:active:not(:disabled){opacity:0.85;transform:scale(0.99);}
+.status-msg{
+  font-size:12px;color:var(--muted);text-align:center;
+  margin-top:6px;min-height:16px;transition:color 0.2s;
+}
+.status-msg.ok{color:var(--success);}
+.status-msg.err{color:var(--danger);}
+
+/* ── RECORDS ── */
+.recsec{padding:0 18px 24px;display:none;}
+.rechead{
+  display:flex;justify-content:space-between;align-items:center;
+  margin-bottom:8px;
+}
+.recttl{color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;}
+.expbtn{
+  font-size:11px;padding:4px 10px;border:1px solid var(--border);
+  border-radius:6px;background:transparent;color:var(--muted);
+  cursor:pointer;touch-action:manipulation;font-family:inherit;
+}
+.expbtn:hover{background:var(--surface);}
+table{width:100%;border-collapse:collapse;font-size:11px;font-family:monospace;}
+th{color:#475569;font-size:9px;padding:4px 5px;text-align:left;border-bottom:1px solid var(--border);}
+td{padding:5px 5px;border-bottom:1px solid var(--faint);color:var(--muted);}
+td.hi{color:white;font-weight:700;}
+
+/* ══════════════════ MODALS ══════════════════ */
+.modal-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);
+  display:flex;align-items:flex-end;justify-content:center;
+  z-index:100;padding-bottom:env(safe-area-inset-bottom,0px);
+}
+.modal-sheet{
+  background:var(--bg);border-radius:20px 20px 0 0;
+  width:100%;max-width:500px;padding:24px 24px 32px;
+  border-top:1px solid var(--border);max-height:90vh;overflow-y:auto;
+}
+.modal-handle{
+  width:36px;height:4px;background:var(--border);
+  border-radius:2px;margin:0 auto 20px;
+}
+.modal-title{font-size:20px;font-weight:800;margin-bottom:4px;letter-spacing:-0.3px;}
+.modal-sub{font-size:13px;color:var(--muted);margin-bottom:20px;line-height:1.5;}
+.modal-actions{display:flex;gap:10px;margin-top:16px;}
+.btn-secondary{
+  flex:1;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r);padding:13px;font-size:14px;
+  color:var(--text);cursor:pointer;font-weight:600;
+  touch-action:manipulation;font-family:inherit;
+  transition:background 0.15s;
+}
+.btn-secondary:active{background:var(--surface2);}
+.btn-danger{
+  color:var(--danger)!important;border-color:rgba(239,68,68,0.3)!important;
+}
+
+.info-card{
+  background:var(--surface);border-radius:var(--r);
+  padding:14px;font-size:12px;color:var(--muted);
+  margin-bottom:16px;border:1px solid var(--border);
+  line-height:1.8;
+}
+.info-card strong{color:var(--text);}
+
+/* ── CALIBRATION ── */
+.cal-steps{
+  display:flex;flex-direction:column;gap:10px;margin-bottom:18px;
+}
+.cal-step{
+  display:flex;gap:10px;align-items:flex-start;
+  font-size:13px;color:var(--muted);line-height:1.5;
+}
+.step-num{
+  min-width:22px;height:22px;border-radius:50%;
+  background:var(--accent);color:white;
+  font-size:11px;font-weight:800;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;margin-top:1px;
+}
+
+/* ── TOAST ── */
+.toast{
+  position:fixed;bottom:28px;left:50%;transform:translateX(-50%);
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:24px;padding:10px 20px;font-size:13px;
+  font-weight:600;z-index:200;opacity:0;
+  transition:opacity 0.25s,transform 0.25s;
+  white-space:nowrap;pointer-events:none;
+  transform:translateX(-50%) translateY(8px);
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+.toast.success{border-color:rgba(34,197,94,0.4);color:var(--success);}
+.toast.error{border-color:rgba(239,68,68,0.4);color:var(--danger);}
+.toast.info{border-color:rgba(59,130,246,0.4);color:var(--accent);}
+
+/* ── SETUP BANNER ── */
+.setup-banner{
+  margin:0 18px 14px;padding:12px 14px;
+  background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);
+  border-radius:var(--r);font-size:12px;color:var(--muted);line-height:1.5;
+}
+.setup-banner a{color:var(--accent2);text-decoration:none;}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════ PAGE 1: LOGIN ═══════════════════ -->
+<div id="pg-login" class="page">
+  <div class="login-bg"></div>
+  <div class="login-wrap">
+    <div class="login-logo">
+      <div class="eyebrow">Sensing Local · Bengaluru</div>
+      <h1>Footpath<br><span>Profiler</span></h1>
+      <p>Field measurement tool for walkability audits</p>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Your Name</label>
+        <input class="form-input" id="l-name" type="text" placeholder="e.g. Ravi Kumar" autocomplete="name">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Phone Number</label>
+        <input class="form-input" id="l-phone" type="tel" placeholder="9876543210">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Phone Model</label>
+      <select class="form-select" id="l-model" onchange="modelChanged()">
+        <option value="">Select model…</option>
+        <option>iPhone 13</option>
+        <option>iPhone 14</option>
+        <option>iPhone 14 Pro</option>
+        <option>iPhone 15</option>
+        <option>iPhone 15 Pro</option>
+        <option>Samsung Galaxy S23</option>
+        <option>Samsung Galaxy S24</option>
+        <option>OnePlus 11</option>
+        <option>OnePlus 12</option>
+        <option>Pixel 7</option>
+        <option>Pixel 8</option>
+        <option>Redmi Note 13</option>
+        <option value="custom">Other (type below)</option>
+      </select>
+      <input class="form-input" id="l-model-custom" type="text"
+             placeholder="Enter your phone model" style="display:none;margin-top:8px;">
+    </div>
+
+    <button class="btn-primary" onclick="doLogin()">Start Surveying →</button>
+  </div>
+</div>
+
+<!-- ═══════════════════ PAGE 2: MAIN ═══════════════════ -->
+<div id="pg-main" class="page hidden">
+
+  <div class="main-hdr">
+    <div class="hdr-left">
+      <div class="hdr-brand">Sensing Local</div>
+      <div class="hdr-user" id="hdr-user-name">—</div>
+    </div>
+    <div class="hdr-actions">
+      <div class="icon-btn-sm" onclick="openSettingsModal()" title="Settings">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </div>
+      <div class="icon-btn-sm" id="btn-cal-hdr" onclick="openCalModal()" title="Calibrate">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+        </svg>
+      </div>
+      <div class="icon-btn-sm" onclick="doLogout()" title="Logout">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <div id="setup-banner" class="setup-banner" style="display:none;">
+    ⚙️ <strong>Apps Script not configured.</strong> Images and data will save locally only.
+    <a href="#" onclick="openCalModal();return false;">Configure →</a>
+  </div>
+
+  <!-- Image canvas -->
+  <div class="vwrap" id="vwrap">
+    <svg id="svg" style="display:none;" xmlns="http://www.w3.org/2000/svg">
+      <g id="zoom-group">
+        <image id="simg"/>
+        <g id="g-grid"></g>
+        <path id="g-frame" fill="none" stroke="var(--yellow)" stroke-width="5"
+              stroke-linecap="round" stroke-linejoin="round"/>
+        <g id="g-ui"></g>
+      </g>
+    </svg>
+    <div class="empty" id="empty">
+      <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3">
+        <rect x="3" y="3" width="18" height="18" rx="3"/>
+        <circle cx="8.5" cy="8.5" r="1.5"/>
+        <path d="M21 15l-5-5L5 21"/>
+      </svg>
+      <div class="upload-btns">
+        <label class="upload-btn" for="fin-gal">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+            <circle cx="8.5" cy="8.5" r="1.5"/>
+            <path d="M21 15l-5-5L5 21"/>
+          </svg>
+          Gallery
+        </label>
+        <label class="upload-btn" for="fin-cam">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+          Camera
+        </label>
+      </div>
+    </div>
+    <!-- Image loaded overlay controls -->
+    <div class="img-actions" id="img-actions" style="display:none;">
+      <div class="pill-btn" onclick="openReplaceMenu()">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+        </svg>
+        Replace
+      </div>
+    </div>
+    <!-- Zoom controls -->
+    <div style="position:absolute;bottom:10px;left:10px;pointer-events:auto;display:flex;flex-direction:column;gap:6px;align-items:flex-start;">
+      <div style="display:flex;gap:6px;">
+        <div onclick="zoomBy(1.4)" style="background:rgba(12,18,32,0.88);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,0.15);border-radius:10px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:20px;font-weight:700;color:white;touch-action:manipulation;">+</div>
+        <div onclick="zoomBy(1/1.4)" style="background:rgba(12,18,32,0.88);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,0.15);border-radius:10px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:20px;font-weight:700;color:white;touch-action:manipulation;">−</div>
+      </div>
+      <div id="zoom-reset" style="display:none;">
+        <div onclick="resetZoom()" style="background:rgba(12,18,32,0.88);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,0.15);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:700;color:white;cursor:pointer;display:flex;align-items:center;gap:5px;touch-action:manipulation;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+          <span id="zoom-label">1×</span>
+        </div>
+      </div>
+    </div>
+    <div class="ovr" id="ovr" style="display:none;">
+      <div class="icon-btn" onclick="swap()">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
+          <path d="M17 16v-2h-7v-2h7v-3l4 4-4 4zM7 11V9h7V7H7V4L3 8l4 4z"/>
+        </svg>
+      </div>
+      <div class="side-tag"><span id="side-lbl">R</span></div>
+    </div>
+  </div>
+  <p class="hint" id="hint" style="display:none;">👆 tap a knob to lock it · drag to move</p>
+
+  <!-- Measurement row -->
+  <div class="ftr">
+    <div class="ftr-r1">
+      <span class="flbl">Footpath width (mm)</span>
+      <div class="vpill"><span class="vval" id="w-val">—</span></div>
+    </div>
+    <div class="ftr-r2">
+      <!-- 4-way focal point nudge pad -->
+      <div style="display:grid;grid-template-columns:repeat(3,36px);grid-template-rows:repeat(3,36px);gap:4px;">
+        <div></div>
+        <button class="nbtn" onclick="nudgeVP(0,-4)" style="width:36px;height:36px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M12 5l-7 7h14z"/></svg>
+        </button>
+        <div></div>
+        <button class="nbtn" onclick="nudgeVP(-4,0)" style="width:36px;height:36px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M5 12l7-7v14z"/></svg>
+        </button>
+        <div style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;">
+          <div style="width:8px;height:8px;border-radius:50%;background:#10b981;"></div>
+        </div>
+        <button class="nbtn" onclick="nudgeVP(4,0)" style="width:36px;height:36px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M19 12l-7-7v14z"/></svg>
+        </button>
+        <div></div>
+        <button class="nbtn" onclick="nudgeVP(0,4)" style="width:36px;height:36px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M12 19l7-7H5z"/></svg>
+        </button>
+        <div></div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+        <div class="cal-badge" id="cal-badge" onclick="openCalModal()">Scale: 1.00×</div>
+        <span style="font-size:10px;color:var(--muted);">focal point</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Materials -->
+
+  <!-- First-use calibration nudge -->
+  <div id="cal-nudge" style="display:none;margin:10px 18px 0;">
+    <div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.25);border-radius:10px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+      <span style="font-size:12px;color:#93b4d8;line-height:1.5;">📐 First time on <strong id="nudge-model" style="color:var(--text);">this phone</strong> — add actual measurement to calibrate the grid scale.</span>
+      <button onclick="openCalModal()" style="background:var(--accent);color:white;border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit;flex-shrink:0;">Calibrate</button>
+    </div>
+  </div>
+
+  <div class="mat-sec">
+    <div class="sec-lbl">Footpath Material</div>
+    <div class="mat-grid">
+      <div class="mat-item" id="mat-paver" onclick="toggleMat('paver')">
+        <div class="mat-thumb">
+          <svg width="56" height="56" viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg">
+            <rect width="56" height="56" fill="#8b96a8"/>
+            <rect x="1" y="1" width="25" height="25" fill="#c8cdd6" rx="1.5"/>
+            <rect x="30" y="1" width="25" height="25" fill="#c8cdd6" rx="1.5"/>
+            <rect x="1" y="30" width="25" height="25" fill="#c8cdd6" rx="1.5"/>
+            <rect x="30" y="30" width="25" height="25" fill="#c8cdd6" rx="1.5"/>
+            <rect x="1" y="1" width="25" height="25" fill="none" stroke="#a0a8b4" stroke-width="0.5" rx="1.5"/>
+            <rect x="30" y="1" width="25" height="25" fill="none" stroke="#a0a8b4" stroke-width="0.5" rx="1.5"/>
+            <rect x="1" y="30" width="25" height="25" fill="none" stroke="#a0a8b4" stroke-width="0.5" rx="1.5"/>
+            <rect x="30" y="30" width="25" height="25" fill="none" stroke="#a0a8b4" stroke-width="0.5" rx="1.5"/>
+          </svg>
+        </div>
+        <span class="mat-name">Paver Blocks</span>
+      </div>
+      <div class="mat-item" id="mat-cement" onclick="toggleMat('cement')">
+        <div class="mat-thumb">
+          <svg width="56" height="56" viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg">
+            <rect width="56" height="56" fill="#b8bec8"/>
+            <line x1="0" y1="14" x2="56" y2="14" stroke="#9ea6b4" stroke-width="0.8"/>
+            <line x1="0" y1="28" x2="56" y2="28" stroke="#9ea6b4" stroke-width="0.8"/>
+            <line x1="0" y1="42" x2="56" y2="42" stroke="#9ea6b4" stroke-width="0.8"/>
+            <line x1="14" y1="0" x2="14" y2="56" stroke="#9ea6b4" stroke-width="0.8"/>
+            <line x1="28" y1="0" x2="28" y2="56" stroke="#9ea6b4" stroke-width="0.8"/>
+            <line x1="42" y1="0" x2="42" y2="56" stroke="#9ea6b4" stroke-width="0.8"/>
+            <rect x="8" y="3" width="12" height="8" rx="1" fill="#cdd2da" opacity="0.5"/>
+            <rect x="34" y="20" width="16" height="6" rx="1" fill="#cdd2da" opacity="0.4"/>
+          </svg>
+        </div>
+        <span class="mat-name">Cement</span>
+      </div>
+      <div class="mat-item" id="mat-mud" onclick="toggleMat('mud')">
+        <div class="mat-thumb">
+          <svg width="56" height="56" viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg">
+            <rect width="56" height="56" fill="#8b6040"/>
+            <ellipse cx="14" cy="18" rx="10" ry="5" fill="#6b4828" opacity="0.6"/>
+            <ellipse cx="38" cy="38" rx="12" ry="6" fill="#6b4828" opacity="0.55"/>
+            <ellipse cx="30" cy="10" rx="7" ry="3.5" fill="#a07050" opacity="0.5"/>
+            <ellipse cx="8" cy="44" rx="6" ry="3" fill="#6b4828" opacity="0.45"/>
+            <ellipse cx="48" cy="20" rx="5" ry="2.5" fill="#a07050" opacity="0.4"/>
+          </svg>
+        </div>
+        <span class="mat-name">Mud / Earth</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Submit -->
+  <div class="submit-sec">
+    <button class="btn-submit" id="btn-submit" onclick="submitRecord()">SUBMIT</button>
+    <div class="status-msg" id="status-msg"></div>
+    <div id="img-download-sec" style="display:none;padding:6px 0 0;"></div>
+  </div>
+
+  <!-- Records table -->
+  <div class="recsec" id="recsec">
+    <div class="rechead">
+      <span class="recttl">Saved measurements</span>
+      <button class="expbtn" onclick="exportCSV()">Export CSV</button>
+    </div>
+    <table>
+      <thead>
+        <tr><th>#</th><th>Side</th><th>mm</th><th>Material</th><th>Grade</th><th>Time</th></tr>
+      </thead>
+      <tbody id="rec-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════ CALIBRATION MODAL ═══════════════════ -->
+<div class="modal-overlay" id="cal-modal" style="display:none;" onclick="closeCalModal(event)">
+  <div class="modal-sheet" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Calibrate</div>
+    <div class="modal-sub">Adjust measurement scale for your phone and camera height.</div>
+
+    <div class="info-card" id="cal-info-card">
+      <strong>Phone:</strong> <span id="cal-phone-lbl">—</span><br>
+      <strong>Current scale:</strong> <span id="cal-scale-lbl">1.000×</span><br>
+      <strong>Camera height:</strong> <span id="cal-eyeh-lbl">1200 mm</span>
+    </div>
+
+    <div class="form-group" style="margin-bottom:14px;">
+      <label class="form-label">Camera Height (mm)</label>
+      <input class="form-input" id="cal-eyeh-input" type="number" placeholder="1200" value="1200">
+      <span class="form-hint">Update if your shooting height changed</span>
+    </div>
+
+    <div class="divider" style="margin-bottom:14px;">Reference calibration (optional)</div>
+
+    <div class="cal-steps">
+      <div class="cal-step"><div class="step-num">1</div>Load a photo where you know a real-world width (e.g. a 600mm floor tile)</div>
+      <div class="cal-step"><div class="step-num">2</div>Position the Building edge and Kerb edge lines exactly on that reference</div>
+      <div class="cal-step"><div class="step-num">3</div>Enter the actual width below and tap Calibrate</div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Known Reference Width (mm)</label>
+      <input class="form-input" id="cal-ref-input" type="number" placeholder="e.g. 600">
+      <span class="form-hint">Leave blank to update camera height only</span>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeCalModal()">Cancel</button>
+      <button class="btn-primary" style="flex:1;" onclick="doCalibrate()">Apply Calibration</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary btn-danger" onclick="resetCal()">Reset to Default</button>
+      <button class="btn-secondary" onclick="closeCalModal();openGuideModal();" style="flex:1;">📋 Field Guide</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ REPLACE MENU MODAL ═══════════════════ -->
+<div class="modal-overlay" id="replace-modal" style="display:none;" onclick="closeReplaceModal(event)">
+  <div class="modal-sheet" onclick="event.stopPropagation()" style="padding-bottom:28px;">
+    <div class="modal-handle"></div>
+    <div class="modal-title" style="margin-bottom:16px;">Replace Photo</div>
+    <div class="modal-actions">
+      <label class="btn-secondary" for="fin-gal" style="text-align:center;cursor:pointer;" onclick="closeReplaceModal()">
+        📷 Choose from Gallery
+      </label>
+      <label class="btn-secondary" for="fin-cam" style="text-align:center;cursor:pointer;" onclick="closeReplaceModal()">
+        📸 Take New Photo
+      </label>
+    </div>
+    <div class="modal-actions" style="margin-top:8px;">
+      <button class="btn-secondary" onclick="closeReplaceModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ SETTINGS MODAL ═══════════ -->
+<div class="modal-overlay" id="settings-modal" style="display:none;" onclick="closeModal('settings-modal',event)">
+  <div class="modal-sheet" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Settings</div>
+
+    <div style="margin-bottom:14px;">
+      <div class="sec-lbl" style="margin-bottom:8px;">Google Apps Script URL <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;">(sheet data)</span></div>
+      <input class="form-input" id="script-url-input" type="url"
+             placeholder="https://script.google.com/macros/s/…/exec"
+             style="font-size:12px;">
+      <span class="form-hint">Logs measurement rows to your Google Sheet.</span>
+    </div>
+
+    <div style="margin-bottom:18px;">
+      <div class="sec-lbl" style="margin-bottom:8px;">Image Server URL <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;">(Drive photos)</span></div>
+      <input class="form-input" id="image-server-input" type="url"
+             placeholder="https://your-app.onrender.com"
+             style="font-size:12px;">
+      <span class="form-hint">Render proxy server that uploads images to Drive. See SETUP.md.</span>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:18px;">
+      <button class="btn-secondary" onclick="testConnection()" style="flex:1;">Test</button>
+      <button class="btn-primary" style="flex:1;" onclick="saveScriptUrl()">Save Both</button>
+    </div>
+
+    <div id="conn-status" style="font-size:12px;color:var(--muted);text-align:center;min-height:16px;margin-bottom:18px;"></div>
+
+    <div style="background:var(--surface);border-radius:var(--r);border:1px solid var(--border);padding:14px;">
+      <div class="sec-lbl" style="margin-bottom:10px;">Setup Steps</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.9;">
+        1. Open the <a href="https://docs.google.com/spreadsheets/d/1j3QSZFLKX4ADH0I80fic6P9p2fy8zs1nTd3Ip7iXHeg" target="_blank" style="color:var(--accent);">Google Sheet</a><br>
+        2. Extensions → Apps Script<br>
+        3. Paste the <strong style="color:var(--text);">apps_script.gs</strong> code and delete any existing code<br>
+        4. Deploy → New Deployment → Web App<br>
+        &nbsp;&nbsp;&nbsp;Execute as: <strong style="color:var(--text);">Me</strong> · Access: <strong style="color:var(--text);">Anyone</strong><br>
+        5. Copy the URL → paste above → Save
+      </div>
+    </div>
+
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn-secondary" onclick="closeModal('settings-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ CALIBRATION GUIDE MODAL ═══════════ -->
+<div class="modal-overlay" id="cal-guide-modal" style="display:none;" onclick="closeModal('cal-guide-modal',event)">
+  <div class="modal-sheet" onclick="event.stopPropagation()" style="max-height:85vh;overflow-y:auto;">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Field Calibration Guide</div>
+    <div class="modal-sub">Validate and tune measurement accuracy against a tape measure.</div>
+
+    <div style="display:flex;flex-direction:column;gap:12px;">
+
+      <div style="background:var(--surface);border-radius:var(--r);padding:14px;border:1px solid var(--border);">
+        <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Step 1 — Find a reference</div>
+        <div style="font-size:13px;color:var(--muted);line-height:1.6;">Pick something with a <strong style="color:var(--text);">known real-world width</strong> at the base of your photo frame — a standard floor tile (300 mm or 600 mm), a road marking, or a kerb section you've measured with tape.</div>
+      </div>
+
+      <div style="background:var(--surface);border-radius:var(--r);padding:14px;border:1px solid var(--border);">
+        <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Step 2 — Set the lines</div>
+        <div style="font-size:13px;color:var(--muted);line-height:1.6;">Position the <strong style="color:var(--building);">Building edge</strong> and <strong style="color:var(--kerb);">Kerb edge</strong> lines so they align exactly with the edges of your reference object at the bottom of the frame. Lock both.</div>
+      </div>
+
+      <div style="background:var(--surface);border-radius:var(--r);padding:14px;border:1px solid var(--border);">
+        <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Step 3 — Calibrate</div>
+        <div style="font-size:13px;color:var(--muted);line-height:1.6;">Tap the <strong style="color:var(--text);">Scale badge</strong> → enter the actual width of your reference → tap <strong style="color:var(--text);">Apply Calibration</strong>. The scale factor updates and is saved for your phone model.</div>
+      </div>
+
+      <div style="background:var(--surface);border-radius:var(--r);padding:14px;border:1px solid var(--border);">
+        <div style="font-size:11px;font-weight:700;color:var(--success);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Expected accuracy</div>
+        <div style="font-size:13px;color:var(--muted);line-height:1.6;">After one calibration, expect <strong style="color:var(--text);">±5–15%</strong> accuracy on level footpaths in good light. Accuracy improves when the footpath fills the lower half of the frame and lines are locked at the bottom edge.</div>
+      </div>
+
+      <div style="background:rgba(245,158,11,0.08);border-radius:var(--r);padding:14px;border:1px solid rgba(245,158,11,0.25);">
+        <div style="font-size:11px;font-weight:700;color:var(--warn);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Tips for best results</div>
+        <div style="font-size:13px;color:var(--muted);line-height:1.7;">
+          • Hold phone at consistent height (elbow height, ~1.2 m)<br>
+          • Point camera straight ahead, not angled down<br>
+          • Both edges of the footpath should be visible<br>
+          • Lock the focal point once set for a survey session<br>
+          • Zoom in to align lines precisely at the bottom of frame
+        </div>
+      </div>
+
+    </div>
+
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn-secondary" onclick="closeModal('cal-guide-modal')">Got it</button>
+      <button class="btn-primary" style="flex:1;" onclick="closeModal('cal-guide-modal');openCalModal();">Calibrate Now →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Hidden file inputs -->
+<input type="file" id="fin-gal" accept="image/*" style="display:none;" onchange="loadFile(event)">
+<input type="file" id="fin-cam" accept="image/*" capture="environment" style="display:none;" onchange="loadFile(event)">
+
+<script>
+// ─── CONFIG ────────────────────────────────────────────────────────────────────
+// After deploying your Apps Script, paste the web app URL here:
+var DRIVE_FOLDER_ID = '1TJ3DiFYcMVRyX58CAh0LN5ZlEhyvXQXX';
+var SHEET_ID        = '1j3QSZFLKX4ADH0I80fic6P9p2fy8zs1nTd3Ip7iXHeg';
+// Loaded from localStorage so user can configure in-app
+var APPS_SCRIPT_URL    = localStorage.getItem('fp_script_url')    || '';
+var IMAGE_SERVER_URL   = localStorage.getItem('fp_image_server_url') || '';
+
+// ─── USER & APP STATE ──────────────────────────────────────────────────────────
+var U = {};
+var S = {
+  W:0, H:0,
+  vp:{ x:0, y:0, locked:false },
+  wBx:0, kBx:0, wZY:0, kMY:0,
+  wLocked:false, kLocked:false,
+  eyeH:1200, scaleFactor:1.0, focal:0,
+  drag:null, _lp:{x:0,y:0}, startP:{x:0,y:0}, moved:false,
+  recs:[], imgLoaded:false,
+  rawImgB64:null, imgMimeType:'image/jpeg',
+  selMats:new Set(),
+  lat:null, lng:null
+};
+
+// ─── LOGIN ─────────────────────────────────────────────────────────────────────
+function modelChanged() {
+  var sel = document.getElementById('l-model').value;
+  document.getElementById('l-model-custom').style.display = sel==='custom' ? 'block' : 'none';
+}
+
+function doLogin() {
+  var name  = document.getElementById('l-name').value.trim();
+  var phone = document.getElementById('l-phone').value.trim();
+  var model = document.getElementById('l-model').value;
+  if (model === 'custom') model = document.getElementById('l-model-custom').value.trim();
 
 
-def get_drive_service():
-    raw = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON')
-    if not raw:
-        raise RuntimeError('GOOGLE_SERVICE_ACCOUNT_JSON environment variable not set')
-    info = json.loads(raw)
-    creds = service_account.Credentials.from_service_account_info(info, scopes=SCOPES)
-    return build('drive', 'v3', credentials=creds)
+  if (!name)  { showToast('Enter your name','error'); return; }
+  if (!phone) { showToast('Enter phone number','error'); return; }
+  if (!model) { showToast('Select phone model','error'); return; }
 
+  U = { name, phone, model, eyeH: 1200 };
+  localStorage.setItem('fp_user', JSON.stringify(U));
+  startMain();
+}
 
-def cors(response):
-    response.headers['Access-Control-Allow-Origin']  = ALLOWED_ORIGIN
-    response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
-    return response
+function doLogout() {
+  if (!confirm('Log out?')) return;
+  localStorage.removeItem('fp_user');
+  showPage('pg-login');
+}
 
+function startMain() {
+  showPage('pg-main');
+  document.getElementById('hdr-user-name').textContent = U.name;
 
-@app.after_request
-def add_cors(response):
-    return cors(response)
+  // Load calibration for this phone model
+  var cal = JSON.parse(localStorage.getItem('fp_cal_' + U.model) || '{}');
+  S.eyeH        = cal.eyeH        || U.eyeH || 1200;
+  S.scaleFactor = cal.scaleFactor || 1.0;
+  updateCalBadge();
 
+  // Show first-use calibration nudge
+  var isFirstUse = !localStorage.getItem("fp_cal_" + U.model);
+  var nudge = document.getElementById("cal-nudge");
+  nudge.style.display = isFirstUse ? "block" : "none";
+  if (isFirstUse) document.getElementById("nudge-model").textContent = U.model;
 
-@app.route('/ping', methods=['GET', 'OPTIONS'])
-def ping():
-    return jsonify({'ok': True, 'message': 'Footpath Profiler image proxy running'})
+  // Show setup banner if no Apps Script configured
+  document.getElementById('setup-banner').style.display =
+    (!APPS_SCRIPT_URL) ? 'block' : 'none';
 
+  // Geolocation
+  refreshGeo();
+}
 
-@app.route('/upload', methods=['OPTIONS'])
-def upload_preflight():
-    return cors(jsonify({'ok': True}))
+function showPage(id) {
+  ['pg-login','pg-main'].forEach(function(p) {
+    document.getElementById(p).classList.toggle('hidden', p !== id);
+  });
+}
 
+// ─── GEOLOCATION ───────────────────────────────────────────────────────────────
+function refreshGeo() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(function(pos) {
+    S.lat = pos.coords.latitude.toFixed(6);
+    S.lng = pos.coords.longitude.toFixed(6);
+  }, function() {});
+}
 
-@app.route('/upload', methods=['POST'])
-def upload():
-    try:
-        payload = request.get_json(force=True)
-        name    = payload.get('name', 'image.jpg')
-        data    = payload.get('data')          # base64 string (no data: prefix)
-        folder  = payload.get('folderId', FOLDER_ID)
+// ─── FILE LOADING ──────────────────────────────────────────────────────────────
+function loadFile(e) {
+  var f = e.target.files[0]; if (!f) return;
+  S.imgMimeType = f.type || 'image/jpeg';
 
-        if not data:
-            return jsonify({'ok': False, 'error': 'No image data provided'}), 400
+  var reader = new FileReader();
+  reader.onload = function(re) {
+    S.rawImgB64 = re.result; // full data URL with base64
+    var url = URL.createObjectURL(f);
+    var im = new Image();
+    im.onload = function() {
+      var wrap = document.getElementById('vwrap');
+      S.W = wrap.clientWidth;
+      S.H = Math.floor(S.W * im.naturalHeight / im.naturalWidth);
+      wrap.style.height = S.H + 'px';
 
-        # Decode base64 → temp file
-        image_bytes = base64.b64decode(data)
-        suffix = '.jpg' if name.endswith('.jpg') else '.png'
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            tmp.write(image_bytes)
-            tmp_path = tmp.name
+      S.focal = S.W / (2 * Math.tan(28 * Math.PI / 180));
 
-        try:
-            service = get_drive_service()
-            file_metadata = {
-                'name': name,
-                'parents': [folder]
+      // LOCK RULE: reset zero (w) and kerb (k), preserve VP if locked
+      if (!S.vp.locked) {
+        S.vp = { x: S.W * 0.50, y: S.H * 0.28, locked: false };
+      }
+      S.wZY = S.H * 0.55; S.kMY = S.H * 0.78;
+      S.wBx = S.W * 0.82; S.kBx = S.W * 0.18;
+      // Apply fence so initial handles are within frame
+      S.wBx = clampBx(S.wBx, S.wZY);
+      S.kBx = clampBx(S.kBx, S.kMY);
+      S.wLocked = false; S.kLocked = false;
+
+      var svg = document.getElementById('svg');
+      svg.setAttribute('viewBox', '0 0 ' + S.W + ' ' + S.H);
+      var si = document.getElementById('simg');
+      si.setAttribute('href', url);
+      si.setAttribute('width',  S.W);
+      si.setAttribute('height', S.H);
+
+      document.getElementById('empty').style.display        = 'none';
+      document.getElementById('img-actions').style.display  = 'block';
+      document.getElementById('ovr').style.display          = 'flex';
+      document.getElementById('hint').style.display         = 'block';
+      svg.style.display = 'block';
+      S.imgLoaded = true;
+      Z = {scale:1,tx:0,ty:0}; applyZoom();
+
+      svg.removeEventListener('pointerdown',  onPD);
+      svg.removeEventListener('pointermove',  onPM);
+      svg.removeEventListener('pointerup',    onPU);
+      svg.removeEventListener('pointercancel',onPU);
+      svg.addEventListener('pointerdown',  onPD, { passive:true  });
+      svg.addEventListener('pointermove',  onPM, { passive:false });
+      svg.addEventListener('pointerup',    onPU, { passive:true  });
+      svg.addEventListener('pointercancel',onPU, { passive:true  });
+      redraw();
+      e.target.value = '';
+    };
+    im.src = url;
+  };
+  reader.readAsDataURL(f);
+}
+
+function openReplaceMenu()  { document.getElementById('replace-modal').style.display='flex'; }
+function closeReplaceModal(e) {
+  if (!e || e.target===document.getElementById('replace-modal'))
+    document.getElementById('replace-modal').style.display='none';
+}
+
+// ─── GEOMETRY ──────────────────────────────────────────────────────────────────
+function lineX(bx, y) {
+  var d = S.H - S.vp.y;
+  return d ? S.vp.x + (bx - S.vp.x) * (y - S.vp.y) / d : bx;
+}
+function toWorldMM(sx, sy) {
+  return sy <= S.vp.y ? 0 : (sx - S.vp.x) * (S.eyeH / (sy - S.vp.y));
+}
+function widthMMRaw() {
+  var wXc = lineX(S.wBx, S.kMY), kXc = lineX(S.kBx, S.kMY);
+  return Math.abs(toWorldMM(wXc, S.kMY) - toWorldMM(kXc, S.kMY));
+}
+function widthMM() {
+  return Math.round(widthMMRaw() * S.scaleFactor);
+}
+function exitPoint(bx) {
+  var sl = (bx - S.vp.x) / (S.H - S.vp.y);
+  var tx = S.vp.x + sl*(S.H - S.vp.y), ty = S.H;
+  if      (tx > S.W) { tx = S.W; ty = S.vp.y + (S.W - S.vp.x) / sl; }
+  else if (tx < 0)   { tx = 0;   ty = S.vp.y + (0   - S.vp.x) / sl; }
+  return { x:tx, y:ty };
+}
+function framePath(p0, p1) {
+  var W=S.W,H=S.H;
+  var oR=function(p){return p.x>W-2;}, oL=function(p){return p.x<2;}, oB=function(p){return p.y>H-2;};
+  var d='M '+p0.x.toFixed(1)+' '+p0.y.toFixed(1);
+  if(oB(p0)&&oB(p1)){d+=' L '+p1.x.toFixed(1)+' '+H;return d;}
+  if     (oR(p0)){d+=' L '+W+' '+H;if(!oB(p1))d+=' L 0 '+H;}
+  else if(oL(p0)){d+=' L 0 '+H;   if(!oB(p1))d+=' L '+W+' '+H;}
+  else{if(oR(p1))d+=' L '+W+' '+H;else if(oL(p1))d+=' L 0 '+H;}
+  d+=' L '+p1.x.toFixed(1)+' '+p1.y.toFixed(1);
+  return d;
+}
+
+// ─── FENCE HELPER ─────────────────────────────────────────────────────────────
+// Clamp bx so the rendered handle at (bx,y) stays within [pad, W-pad]
+var FENCE = 28; // px padding from edge (roughly handle radius)
+function clampBx(bx, y) {
+  if (y <= S.vp.y) return bx;
+  var ratio = (S.H - S.vp.y) / (y - S.vp.y);
+  var minBx = S.vp.x + (FENCE - S.vp.x) * ratio;
+  var maxBx = S.vp.x + (S.W - FENCE - S.vp.x) * ratio;
+  if (minBx > maxBx) { var tmp=minBx; minBx=maxBx; maxBx=tmp; }
+  return Math.max(minBx, Math.min(maxBx, bx));
+}
+
+// ─── ZOOM STATE ────────────────────────────────────────────────────────────────
+var Z = { scale:1, tx:0, ty:0 };
+var _ptrs = {};   // active pointers: pointerId → raw SVG coords
+var _pinch0 = null;
+
+function svgRaw(e) {
+  var r = document.getElementById('svg').getBoundingClientRect();
+  return {
+    x: (e.clientX - r.left) / r.width  * S.W,
+    y: (e.clientY - r.top)  / r.height * S.H
+  };
+}
+function toContent(raw) {
+  return { x: (raw.x - Z.tx) / Z.scale, y: (raw.y - Z.ty) / Z.scale };
+}
+function getXY(e) { return toContent(svgRaw(e)); }
+
+function clampZoom() {
+  Z.tx = Math.max(S.W*(1-Z.scale), Math.min(0, Z.tx));
+  Z.ty = Math.max(S.H*(1-Z.scale), Math.min(0, Z.ty));
+}
+function applyZoom() {
+  var zg = document.getElementById('zoom-group');
+  if (zg) zg.setAttribute('transform',
+    'translate('+Z.tx.toFixed(1)+','+Z.ty.toFixed(1)+') scale('+Z.scale.toFixed(3)+')');
+  var zr = document.getElementById('zoom-reset');
+  if (zr) {
+    var isZ = Z.scale > 1.05;
+    zr.style.display = isZ ? 'block' : 'none';
+    var zl = document.getElementById('zoom-label');
+    if (zl && isZ) zl.textContent = Z.scale.toFixed(1)+'×';
+  }
+  // Re-render UI elements so counter-scale (isc) reflects new zoom level
+  if (S.imgLoaded) redraw();
+}
+function resetZoom() { Z={scale:1,tx:0,ty:0}; applyZoom(); }
+function zoomBy(factor) {
+  if (!S.W) return;
+  var ns = Math.max(1, Math.min(6, Z.scale * factor));
+  // Zoom toward center of image
+  var cx = S.W/2, cy = S.H/2;
+  Z.tx = cx - (cx - Z.tx) * ns / Z.scale;
+  Z.ty = cy - (cy - Z.ty) * ns / Z.scale;
+  Z.scale = ns;
+  clampZoom(); applyZoom();
+}
+
+function pDist(a,b){ return Math.hypot(a.x-b.x,a.y-b.y); }
+function pMid(a,b) { return {x:(a.x+b.x)/2,y:(a.y+b.y)/2}; }
+
+// ─── POINTER EVENTS ────────────────────────────────────────────────────────────
+function onPD(e) {
+  var raw = svgRaw(e);
+  _ptrs[e.pointerId] = raw;
+  var ids = Object.keys(_ptrs);
+
+  if (ids.length >= 2) {
+    // Two fingers — start pinch, cancel any handle drag
+    S.drag = null;
+    var pa=_ptrs[ids[0]], pb=_ptrs[ids[1]];
+    _pinch0 = { dist:pDist(pa,pb), mid:pMid(pa,pb), Z:{scale:Z.scale,tx:Z.tx,ty:Z.ty} };
+    return;
+  }
+
+  // Single finger — hit-test in content coords
+  var p = toContent(raw);
+  S.startP = {x:p.x,y:p.y}; S.moved = false; S._t = Date.now();
+  var wXz=lineX(S.wBx,S.wZY), kXm=lineX(S.kBx,S.kMY);
+  var p0=exitPoint(S.wBx), p1=exitPoint(S.kBx);
+  var hr = 1/Z.scale; // scale hit radius with zoom
+
+  if     (Math.hypot(p.x-S.vp.x,p.y-S.vp.y) < 50*hr)              S.drag='vp';
+  else if(Math.hypot(p.x-wXz,   p.y-S.wZY)   < 70*hr)              S.drag='w';
+  else if(Math.hypot(p.x-kXm,   p.y-S.kMY)   < 70*hr)              S.drag='k';
+  else if(S.wLocked && Math.hypot(p.x-p0.x,  p.y-p0.y)  < 40*hr)  S.drag='w';
+  else if(S.kLocked && Math.hypot(p.x-p1.x,  p.y-p1.y)  < 40*hr)  S.drag='k';
+  else                                                                S.drag = Z.scale>1.05 ? 'pan' : null;
+
+  if (!S.drag) return;
+  try { e.target.setPointerCapture(e.pointerId); } catch(ex) {}
+  S._lp = p; S._rawLp = raw;
+}
+
+function onPM(e) {
+  var raw = svgRaw(e);
+  _ptrs[e.pointerId] = raw;
+  var ids = Object.keys(_ptrs);
+
+  // ── Pinch zoom ──
+  if (ids.length >= 2 && _pinch0) {
+    e.preventDefault();
+    var pa=_ptrs[ids[0]], pb=_ptrs[ids[1]];
+    var dist=pDist(pa,pb), mid=pMid(pa,pb);
+    var ns = Math.max(1, Math.min(6, _pinch0.Z.scale * dist / _pinch0.dist));
+    var cx = (_pinch0.mid.x - _pinch0.Z.tx) / _pinch0.Z.scale;
+    var cy = (_pinch0.mid.y - _pinch0.Z.ty) / _pinch0.Z.scale;
+    Z.scale=ns; Z.tx=mid.x-cx*ns; Z.ty=mid.y-cy*ns;
+    clampZoom(); applyZoom();
+    return;
+  }
+
+  if (!S.drag) return;
+  var p = toContent(raw);
+  var dx=p.x-S._lp.x, dy=p.y-S._lp.y;
+  if (!S.moved && Math.hypot(p.x-S.startP.x,p.y-S.startP.y)>14) S.moved=true;
+
+  // ── Pan when zoomed ──
+  if (S.drag==='pan') {
+    e.preventDefault();
+    Z.tx += raw.x - S._rawLp.x;
+    Z.ty += raw.y - S._rawLp.y;
+    clampZoom(); applyZoom();
+    S._lp=p; S._rawLp=raw;
+    return;
+  }
+
+  // ── Handle drag ──
+  if (S.moved) {
+    e.preventDefault();
+    if (S.drag==='vp' && !S.vp.locked) {
+      S.vp.x=Math.max(FENCE,Math.min(S.W-FENCE,p.x));
+      S.vp.y=Math.max(FENCE,Math.min(S.H*0.6,p.y));
+    } else if (S.drag==='w' && !S.wLocked) {
+      S.wZY=Math.max(S.vp.y+30,Math.min(S.H-FENCE,S.wZY+dy));
+      var tX=lineX(S.wBx,S.wZY)+dx*2;
+      tX=Math.max(FENCE,Math.min(S.W-FENCE,tX));
+      S.wBx=clampBx(S.vp.x+(tX-S.vp.x)*(S.H-S.vp.y)/(S.wZY-S.vp.y),S.wZY);
+    } else if (S.drag==='k' && !S.kLocked) {
+      S.kMY=Math.max(S.vp.y+30,Math.min(S.H-FENCE,S.kMY+dy));
+      var tX2=lineX(S.kBx,S.kMY)+dx*2;
+      tX2=Math.max(FENCE,Math.min(S.W-FENCE,tX2));
+      S.kBx=clampBx(S.vp.x+(tX2-S.vp.x)*(S.H-S.vp.y)/(S.kMY-S.vp.y),S.kMY);
+    }
+    S._lp=p; S._rawLp=raw; redraw();
+  }
+}
+
+function onPU(e) {
+  delete _ptrs[e.pointerId];
+  if (Object.keys(_ptrs).length < 2) _pinch0 = null;
+
+  // Tap = any touch under 600ms (time-only, no movement penalty)
+  var isTap = (Date.now() - S._t) < 600;
+
+  if (S.drag && S.drag!=='pan' && isTap) {
+    if      (S.drag==='vp') { S.vp.locked=!S.vp.locked; }
+    else if (S.drag==='w')  { S.wLocked=!S.wLocked; }
+    else if (S.drag==='k')  { S.kLocked=!S.kLocked; }
+    redraw(); updateLockBtns();
+  }
+  if (Object.keys(_ptrs).length===0) { S.drag=null; S.moved=false; }
+}
+
+// ─── DRAW ──────────────────────────────────────────────────────────────────────
+function lockIcon(locked) {
+  if(!locked) return '';
+  return '<g transform="translate(-8,-9)">'
+       + '<rect x="0" y="8" width="16" height="11" rx="2.5" fill="none" stroke="white" stroke-width="2"/>'
+       + '<path d="M4 8 V5 a4 4 0 0 1 8 0 V8" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"/>'
+       + '</g>';
+}
+function redraw() {
+  if(!S.W)return;
+  var wXz=lineX(S.wBx,S.wZY), kXm=lineX(S.kBx,S.kMY);
+  var wXc=lineX(S.wBx,S.kMY), kXc=lineX(S.kBx,S.kMY);
+  var mm=widthMM();
+  document.getElementById('w-val').textContent    = mm||'—';
+  document.getElementById('side-lbl').textContent = S.wBx>S.kBx?'R':'L';
+  var p0=exitPoint(S.wBx), p1=exitPoint(S.kBx);
+
+  // isc = inverse scale: counter-scale UI elements so they stay constant screen size
+  var isc = 1 / Z.scale;
+
+  // Frame outline — counter-scaled stroke
+  var frameEl = document.getElementById('g-frame');
+  frameEl.setAttribute('d', framePath(p0,p1));
+  frameEl.setAttribute('stroke-width', (5*isc).toFixed(2));
+
+  // depth grid — counter-scaled stroke
+  var grid='';
+  for(var z=1000;z<=12000;z+=1000){
+    var py=S.vp.y+(S.focal*S.eyeH/z);
+    if(py>S.vp.y&&py<=S.H)
+      grid+='<line x1="'+lineX(S.wBx,py)+'" y1="'+py
+           +'" x2="'+lineX(S.kBx,py)+'" y2="'+py
+           +'" stroke="white" stroke-width="'+(1*isc).toFixed(2)+'" opacity="0.2"/>';
+  }
+  document.getElementById('g-grid').innerHTML=grid;
+
+  var bLeft=S.wBx<S.kBx, wLW=130, kLW=100;
+  var wLX=bLeft?32:-(wLW+32);
+  var kLX=bLeft?-(kLW+32):32;
+  var u='';
+
+  // XSZ stays constant on screen — scale by isc in content space
+  var XSZ = 12*isc;
+  // Stroke widths counter-scaled
+  var sw_line  = (2.5*isc).toFixed(2);
+  var sw_thick = (3.0*isc).toFixed(2);
+  var sw_knob  = (3.0*isc).toFixed(2);
+  var sw_cross = (3.5*isc).toFixed(2);
+  var sw_width = (2.0*isc).toFixed(2);
+  var sw_dim   = (2.0*isc).toFixed(2);
+  var dash_guide = (8*isc)+','+(5*isc);
+  var dash_w     = (4*isc)+' '+(3*isc);
+
+  // Perspective guide lines — counter-scaled stroke & dash
+  u+='<line x1="'+S.vp.x+'" y1="'+S.vp.y+'" x2="'+p0.x+'" y2="'+p0.y
+    +'" stroke="#f59e0b" stroke-width="'+(S.wLocked?sw_thick:sw_line)+'" '
+    +(S.wLocked?'':'stroke-dasharray="'+dash_guide+'" ')+'opacity="'+(S.wLocked?1:0.8)+'"/>';
+  u+='<line x1="'+S.vp.x+'" y1="'+S.vp.y+'" x2="'+p1.x+'" y2="'+p1.y
+    +'" stroke="#2dd4bf" stroke-width="'+(S.kLocked?sw_thick:sw_line)+'" '
+    +(S.kLocked?'':'stroke-dasharray="'+dash_guide+'" ')+'opacity="'+(S.kLocked?1:0.8)+'"/>';
+
+  // Width indicator line
+  u+='<line x1="'+wXc+'" y1="'+S.kMY+'" x2="'+kXc+'" y2="'+S.kMY
+    +'" stroke="white" stroke-width="'+sw_width+'" stroke-dasharray="'+dash_w+'" opacity="0.5"/>';
+
+  // Helper: counter-scaled group at a point
+  // transform="translate(x,y) scale(isc)" keeps visual size constant
+  var sc = isc.toFixed(4);
+
+  // Vanishing point handle
+  if(S.vp.locked) {
+    u+='<g transform="translate('+S.vp.x+','+S.vp.y+') scale('+sc+')">'
+      +'<line x1="-12" y1="-12" x2="12" y2="12" stroke="#10b981" stroke-width="3.5" stroke-linecap="round"/>'
+      +'<line x1="12" y1="-12" x2="-12" y2="12" stroke="#10b981" stroke-width="3.5" stroke-linecap="round"/>'
+      +'<line x1="-12" y1="-12" x2="12" y2="12" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>'
+      +'<line x1="12" y1="-12" x2="-12" y2="12" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>'
+      +'</g>';
+  } else {
+    u+='<g transform="translate('+S.vp.x+','+S.vp.y+') scale('+sc+')" opacity="0.85">'
+      +'<circle r="22" fill="#10b981" stroke="white" stroke-width="2.5"/>'
+      +'</g>';
+  }
+
+  // Building edge handle
+  var wExit = (S.wLocked && S.wLockedExit) ? S.wLockedExit : p0;
+  if(S.wLocked) {
+    u+='<g transform="translate('+wExit.x.toFixed(1)+','+wExit.y.toFixed(1)+') scale('+sc+')">'
+      +'<line x1="-12" y1="-12" x2="12" y2="12" stroke="#f59e0b" stroke-width="3.5" stroke-linecap="round"/>'
+      +'<line x1="12" y1="-12" x2="-12" y2="12" stroke="#f59e0b" stroke-width="3.5" stroke-linecap="round"/>'
+      +'<line x1="-12" y1="-12" x2="12" y2="12" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>'
+      +'<line x1="12" y1="-12" x2="-12" y2="12" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>'
+      +'</g>';
+    u+='<g transform="translate('+wXz+','+S.wZY+') scale('+sc+')" opacity="0.4" fill="#f59e0b">'
+      +'<circle r="24" fill="inherit" stroke="white" stroke-width="2"/>'
+      +lockIcon(true)+'</g>';
+  } else {
+    u+='<g transform="translate('+wXz+','+S.wZY+') scale('+sc+')" fill="#f59e0b">'
+      +'<circle r="24" fill="inherit" stroke="white" stroke-width="3"/>'
+      +lockIcon(false)
+      +'<rect x="'+wLX+'" y="-16" width="'+wLW+'" height="32" rx="16" fill="#f59e0b"/>'
+      +'<text x="'+(wLX+wLW/2)+'" y="6" font-size="14" font-weight="700" fill="white" text-anchor="middle">Building edge</text>'
+      +'</g>';
+  }
+
+  // Kerb edge handle
+  var kExit = (S.kLocked && S.kLockedExit) ? S.kLockedExit : p1;
+  if(S.kLocked) {
+    u+='<g transform="translate('+kExit.x.toFixed(1)+','+kExit.y.toFixed(1)+') scale('+sc+')">'
+      +'<line x1="-12" y1="-12" x2="12" y2="12" stroke="#2dd4bf" stroke-width="3.5" stroke-linecap="round"/>'
+      +'<line x1="12" y1="-12" x2="-12" y2="12" stroke="#2dd4bf" stroke-width="3.5" stroke-linecap="round"/>'
+      +'<line x1="-12" y1="-12" x2="12" y2="12" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>'
+      +'<line x1="12" y1="-12" x2="-12" y2="12" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>'
+      +'</g>';
+    u+='<g transform="translate('+kXm+','+S.kMY+') scale('+sc+')" opacity="0.4" fill="#2dd4bf">'
+      +'<circle r="24" fill="inherit" stroke="white" stroke-width="2"/>'
+      +lockIcon(true)+'</g>';
+  } else {
+    u+='<g transform="translate('+kXm+','+S.kMY+') scale('+sc+')" fill="#2dd4bf">'
+      +'<circle r="24" fill="inherit" stroke="white" stroke-width="3"/>'
+      +lockIcon(false)
+      +'<rect x="'+kLX+'" y="-16" width="'+kLW+'" height="32" rx="16" fill="#2dd4bf"/>'
+      +'<text x="'+(kLX+kLW/2)+'" y="6" font-size="14" font-weight="700" fill="white" text-anchor="middle">Kerb edge</text>'
+      +'</g>';
+  }
+
+  document.getElementById('g-ui').innerHTML=u;
+}
+
+// ─── SWAP / NUDGE ──────────────────────────────────────────────────────────────
+function swap() {
+  var t=S.wBx;S.wBx=S.kBx;S.kBx=t;
+  var ty=S.wZY;S.wZY=S.kMY;S.kMY=ty;
+  redraw();
+}
+function nudgeVP(dx, dy) {
+  if (S.vp.locked) return;
+  S.vp.x = Math.max(FENCE, Math.min(S.W-FENCE, S.vp.x + dx));
+  S.vp.y = Math.max(FENCE, Math.min(S.H*0.6,   S.vp.y + dy));
+  redraw();
+}
+function toggleLockW() {
+  S.wLocked=!S.wLocked; redraw(); updateLockBtns();
+}
+function toggleLockK() {
+  S.kLocked=!S.kLocked; redraw(); updateLockBtns();
+}
+function updateLockBtns() {
+  var wb=document.getElementById('lock-w-btn');
+  var kb=document.getElementById('lock-k-btn');
+  if(!wb||!kb) return;
+  // Building edge button
+  if(S.wLocked) {
+    wb.style.background='rgba(245,158,11,0.15)';
+    wb.style.borderColor='#f59e0b';
+    document.getElementById('lock-w-label').textContent='Unlock Building Edge';
+    document.getElementById('lock-w-icon').innerHTML=
+      '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0"/>';
+  } else {
+    wb.style.background='var(--surface)';
+    wb.style.borderColor='#f59e0b33';
+    document.getElementById('lock-w-label').textContent='Lock Building Edge';
+    document.getElementById('lock-w-icon').innerHTML=
+      '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>';
+  }
+  // Kerb edge button
+  if(S.kLocked) {
+    kb.style.background='rgba(45,212,191,0.12)';
+    kb.style.borderColor='#2dd4bf';
+    document.getElementById('lock-k-label').textContent='Unlock Kerb Edge';
+    document.getElementById('lock-k-icon').innerHTML=
+      '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0"/>';
+  } else {
+    kb.style.background='var(--surface)';
+    kb.style.borderColor='#2dd4bf33';
+    document.getElementById('lock-k-label').textContent='Lock Kerb Edge';
+    document.getElementById('lock-k-icon').innerHTML=
+      '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>';
+  }
+}
+
+// ─── MATERIALS ─────────────────────────────────────────────────────────────────
+function toggleMat(id) {
+  var el=document.getElementById('mat-'+id);
+  if(S.selMats.has(id)){S.selMats.delete(id);el.classList.remove('sel');}
+  else                 {S.selMats.add(id);   el.classList.add('sel');   }
+}
+
+// ─── GRADE ─────────────────────────────────────────────────────────────────────
+function grade(mm) {
+  if(mm<900)  return{l:'narrow',    c:'#fca5a5'};
+  if(mm<1800) return{l:'marginal',  c:'#fcd34d'};
+  return           {l:'accessible',c:'#86efac'};
+}
+
+// ─── CAPTURE ANNOTATED IMAGE ───────────────────────────────────────────────────
+function captureAnnotated() {
+  return new Promise(function(resolve) {
+    if(!S.rawImgB64){resolve(null);return;}
+    var canvas=document.createElement('canvas');
+    canvas.width=S.W; canvas.height=S.H;
+    var ctx=canvas.getContext('2d');
+    var bgImg=new Image();
+    bgImg.onload=function() {
+      ctx.drawImage(bgImg,0,0,S.W,S.H);
+      // Render SVG overlay without background image
+      var svgEl=document.getElementById('svg').cloneNode(true);
+      var si=svgEl.querySelector('#simg');
+      si.setAttribute('href','');
+      si.removeAttribute('href');
+      var svgStr=new XMLSerializer().serializeToString(svgEl);
+      var blob=new Blob([svgStr],{type:'image/svg+xml;charset=utf-8'});
+      var url=URL.createObjectURL(blob);
+      var ov=new Image();
+      ov.onload=function(){
+        ctx.drawImage(ov,0,0,S.W,S.H);
+        URL.revokeObjectURL(url);
+        resolve(canvas.toDataURL('image/jpeg',0.88));
+      };
+      ov.onerror=function(){resolve(canvas.toDataURL('image/jpeg',0.88));};
+      ov.src=url;
+    };
+    bgImg.onerror=function(){resolve(null);};
+    bgImg.src=S.rawImgB64;
+  });
+}
+
+// ─── SUBMIT ────────────────────────────────────────────────────────────────────
+async function submitRecord() {
+  if(!S.imgLoaded){showToast('Upload a photo first','error');return;}
+  var mm=widthMM();
+  if(!mm){showToast('Position the lines on the photo first','error');return;}
+
+  var btn=document.getElementById('btn-submit');
+  btn.disabled=true;
+  setStatus('Saving…','');
+
+  var g=grade(mm);
+  var now=new Date();
+  var t=now.toLocaleTimeString();
+  var dateStr=now.toISOString().slice(0,10);
+  var id=S.recs.length+1;
+  var sd=S.wBx>S.kBx?'R':'L';
+  var mats=Array.from(S.selMats).join(', ')||'—';
+  var imgName='fp_'+dateStr+'_'+U.name.replace(/\s+/g,'_')+'_'+id;
+
+  var annotatedB64=null;
+  try{annotatedB64=await captureAnnotated();}catch(ex){}
+
+  var rec={
+    id, side:sd, mm, grade:g.l, material:mats,
+    lat:S.lat||'', lng:S.lng||'',
+    time:now.toISOString(), surveyor:U.name,
+    phone:U.phone, model:U.model
+  };
+
+  if (APPS_SCRIPT_URL) {
+    // ── Step 1: Log row (small payload, always reliable) ──
+    setStatus('Saving to Sheets…', '');
+    var rowOk = false;
+    try {
+      await postToScript({ action: 'logRow', row: rec });
+      rowOk = true;
+      setStatus('Row saved ✓ — uploading images…', 'ok');
+    } catch(err) {
+      setStatus('Sheet error: ' + err.message + ' — check script is redeployed', 'err');
+    }
+
+    // ── Step 2: Upload images to Drive via Render proxy ──
+    if (rowOk) {
+      var rawSnap = S.rawImgB64, annSnap = annotatedB64;
+      if (IMAGE_SERVER_URL) {
+        setStatus('Row saved ✓ — uploading images to Drive…', 'ok');
+        ;(async function() {
+          try {
+            var rawC = rawSnap  ? await compressImage(rawSnap,  800, 0.82) : null;
+            var annC = annSnap  ? await compressImage(annSnap,  800, 0.82) : null;
+            var uploaded = 0;
+            if (rawC) {
+              await uploadImageToServer(IMAGE_SERVER_URL, imgName + '_raw.jpg', rawC.split(',')[1]);
+              uploaded++;
             }
-            media = MediaFileUpload(tmp_path, mimetype='image/jpeg', resumable=False)
-            uploaded = service.files().create(
-                body=file_metadata,
-                media_body=media,
-                fields='id, webViewLink'
-            ).execute()
+            if (annC) {
+              await uploadImageToServer(IMAGE_SERVER_URL, imgName + '_annotated.jpg', annC.split(',')[1]);
+              uploaded++;
+            }
+            setStatus('Saved ✓ — ' + uploaded + ' image(s) uploaded to Drive', 'ok');
+            hideDownloadBanner();
+          } catch(imgErr) {
+            setStatus('Row saved ✓ — image upload failed: ' + imgErr.message, 'err');
+            showDownloadBanner(rawSnap, annSnap, imgName);
+          }
+        })();
+      } else {
+        // No image server configured — download to device as fallback
+        setStatus('Row saved ✓ — images downloading to device', 'ok');
+        setTimeout(function() { showDownloadBanner(rawSnap, annSnap, imgName); }, 600);
+      }
+    }
+  } else {
+    setStatus('Saved locally — add Apps Script URL in ⚙ Settings to sync', '');
+  }
 
-            # Make file viewable by anyone with the link
-            service.permissions().create(
-                fileId=uploaded['id'],
-                body={'type': 'anyone', 'role': 'reader'}
-            ).execute()
+  // Update records table
+  S.recs.push(rec);
+  document.getElementById('rec-body').innerHTML+=
+    '<tr><td>'+id+'</td><td>'+sd+'</td>'
+    +'<td class="hi">'+mm+'</td>'
+    +'<td style="font-size:10px;">'+mats+'</td>'
+    +'<td style="color:'+g.c+'">'+g.l+'</td>'
+    +'<td style="color:#475569">'+t+'</td></tr>';
+  document.getElementById('recsec').style.display='block';
 
-            logging.info(f"Uploaded {name} → {uploaded['id']}")
-            return jsonify({
-                'ok':   True,
-                'id':   uploaded['id'],
-                'url':  uploaded.get('webViewLink', ''),
-                'name': name
-            })
+  showToast('Submitted!','success');
+  setTimeout(function(){
+    resetForNext();
+    btn.disabled=false;
+  },1400);
+}
 
-        finally:
-            os.unlink(tmp_path)
+// ─── IMAGE COMPRESSION ────────────────────────────────────────────────────────
+function compressImage(dataUrl, maxPx, quality) {
+  return new Promise(function(resolve) {
+    if (!dataUrl) { resolve(null); return; }
+    var img = new Image();
+    img.onload = function() {
+      var w = img.width, h = img.height;
+      if (w > maxPx || h > maxPx) {
+        if (w > h) { h = Math.round(h * maxPx / w); w = maxPx; }
+        else       { w = Math.round(w * maxPx / h); h = maxPx; }
+      }
+      var c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(c.toDataURL('image/jpeg', quality || 0.80));
+    };
+    img.onerror = function() { resolve(dataUrl); };
+    img.src = dataUrl;
+  });
+}
 
-    except Exception as e:
-        logging.error(f"Upload error: {e}")
-        return jsonify({'ok': False, 'error': str(e)}), 500
+// ─── APPS SCRIPT COMMUNICATION ────────────────────────────────────────────────
+// Must use text/plain — application/json triggers a CORS preflight that
+// Apps Script doesn't handle, so the POST would never reach doPost().
+function postToScript(payload) {
+  return fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload),
+    redirect: 'follow'
+  })
+  .then(function(r) { return r.text(); })
+  .then(function(text) {
+    try {
+      var data = JSON.parse(text);
+      if (data && data.ok === false) throw new Error(data.error || 'Script error');
+      return data || { ok: true };
+    } catch(e) {
+      // A non-JSON response (e.g. redirect HTML) still means the POST reached the script
+      if (text && text.length > 0) return { ok: true };
+      throw e;
+    }
+  });
+}
 
+function resetForNext() {
+  document.getElementById('svg').style.display         ='none';
+  document.getElementById('empty').style.display        ='flex';
+  document.getElementById('img-actions').style.display  ='none';
+  document.getElementById('ovr').style.display          ='none';
+  document.getElementById('hint').style.display         ='none';
+  document.getElementById('w-val').textContent          ='—';
+  S.imgLoaded=false; S.rawImgB64=null;
+  S.selMats.clear();
+  ['paver','cement','mud'].forEach(function(m){
+    document.getElementById('mat-'+m).classList.remove('sel');
+  });
+  // Zero/kerb locks reset; VP lock PRESERVED
+  S.wLocked=false; S.kLocked=false; S.wLockedExit=null; S.kLockedExit=null;
+  updateLockBtns();
+  setStatus('','');
+  var dl=document.getElementById('img-download-sec');
+  if(dl){dl.style.display='none';dl.innerHTML='';}
+  refreshGeo();
+}
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+// ─── CALIBRATION ───────────────────────────────────────────────────────────────
+function openCalModal() {
+  var cal=JSON.parse(localStorage.getItem('fp_cal_'+U.model)||'{}');
+  document.getElementById('cal-phone-lbl').textContent = U.model;
+  document.getElementById('cal-scale-lbl').textContent = (cal.scaleFactor||1).toFixed(3)+'×';
+  document.getElementById('cal-eyeh-lbl').textContent  = (cal.eyeH||U.eyeH||1200)+' mm';
+  document.getElementById('cal-eyeh-input').value      = cal.eyeH||U.eyeH||1200;
+  document.getElementById('cal-ref-input').value       = '';
+  document.getElementById('cal-modal').style.display   = 'flex';
+}
+function closeCalModal(e) {
+  if(!e||e.target===document.getElementById('cal-modal'))
+    document.getElementById('cal-modal').style.display='none';
+}
+function doCalibrate() {
+  var newEyeH = parseInt(document.getElementById('cal-eyeh-input').value)||1200;
+  var refMM   = parseFloat(document.getElementById('cal-ref-input').value);
+
+  S.eyeH = newEyeH;
+
+  if(refMM){
+    if(!S.imgLoaded){
+      showToast('Load image & position lines first','error');
+      return;
+    }
+    var raw=widthMMRaw();
+    if(raw>0) S.scaleFactor=refMM/raw;
+  }
+
+  var cal={eyeH:newEyeH,scaleFactor:S.scaleFactor};
+  localStorage.setItem('fp_cal_'+U.model,JSON.stringify(cal));
+  updateCalBadge();
+  if(S.imgLoaded) redraw();
+  closeCalModal();
+  showToast('Calibration saved for '+U.model,'success');
+  document.getElementById('cal-nudge').style.display='none';
+  document.getElementById('btn-cal-hdr').classList.toggle('active', S.scaleFactor!==1.0);
+}
+function resetCal() {
+  if(!confirm('Reset calibration for '+U.model+'?')) return;
+  S.scaleFactor=1.0;
+  S.eyeH=U.eyeH||1200;
+  localStorage.removeItem('fp_cal_'+U.model);
+  updateCalBadge();
+  if(S.imgLoaded) redraw();
+  closeCalModal();
+  showToast('Calibration reset','info');
+  document.getElementById('btn-cal-hdr').classList.remove('active');
+}
+function updateCalBadge() {
+  var el=document.getElementById('cal-badge');
+  el.textContent='Scale: '+S.scaleFactor.toFixed(2)+'×';
+  el.classList.toggle('calibrated', S.scaleFactor!==1.0);
+}
+
+// ─── EXPORT CSV ────────────────────────────────────────────────────────────────
+function exportCSV() {
+  var rows=['#,Surveyor,Phone,Model,Side,Width (mm),Width (m),Material,Grade,Lat,Lng,Timestamp'];
+  S.recs.forEach(function(r){
+    rows.push([r.id,r.surveyor,r.phone,r.model,r.side,r.mm,(r.mm/1000).toFixed(3),
+               '"'+r.material+'"',r.grade,r.lat,r.lng,r.time].join(','));
+  });
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([rows.join('\n')],{type:'text/csv'}));
+  a.download='footpath_widths_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
+}
+
+// ─── UTILS ─────────────────────────────────────────────────────────────────────
+function setStatus(msg,cls) {
+  var el=document.getElementById('status-msg');
+  el.textContent=msg;
+  el.className='status-msg'+(cls?' '+cls:'');
+}
+var _tt;
+function showToast(msg,type) {
+  var t=document.getElementById('toast');
+  t.textContent=msg;
+  t.className='toast show'+(type?' '+type:'');
+  clearTimeout(_tt);
+  _tt=setTimeout(function(){t.className='toast';},2600);
+}
+
+// ─── IMAGE SERVER UPLOAD ──────────────────────────────────────────────────────
+function uploadImageToServer(serverUrl, name, base64data) {
+  var url = serverUrl.replace(/\/+$/, '') + '/upload';
+  console.log('[FP] Uploading to:', url, 'name:', name, 'dataLen:', base64data ? base64data.length : 0);
+  return fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: name, data: base64data, folderId: '1TJ3DiFYcMVRyX58CAh0LN5ZlEhyvXQXX' })
+  })
+  .then(function(r) {
+    console.log('[FP] Upload response status:', r.status);
+    return r.json();
+  })
+  .then(function(d) {
+    console.log('[FP] Upload response data:', JSON.stringify(d));
+    if (!d.ok) throw new Error(d.error || 'Server error');
+    return d;
+  })
+  .catch(function(err) {
+    console.error('[FP] Upload error:', err.message);
+    throw err;
+  });
+}
+
+function showDownloadBanner(rawB64, annB64, name) {
+  var el = document.getElementById('img-download-sec');
+  if (!el) return;
+  function dlLink(dataUrl, filename, label) {
+    if (!dataUrl) return '';
+    return '<a href="'+dataUrl+'" download="'+filename+'" style="display:inline-flex;align-items:center;gap:5px;padding:7px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);text-decoration:none;margin-right:8px;">⬇ '+label+'</a>';
+  }
+  el.style.display = 'block';
+  el.innerHTML = '<div style="background:rgba(59,130,246,0.07);border:1px solid rgba(59,130,246,0.2);border-radius:10px;padding:12px 14px;">'
+    + '<div style="font-size:11px;color:#93b4d8;margin-bottom:8px;">Save images to <a href="https://drive.google.com/drive/folders/1TJ3DiFYcMVRyX58CAh0LN5ZlEhyvXQXX" target="_blank" style="color:var(--accent);">Drive folder</a> manually:</div>'
+    + '<div>' + dlLink(rawB64, name+'_raw.jpg', 'Raw') + dlLink(annB64, name+'_annotated.jpg', 'Annotated') + '</div>'
+    + '</div>';
+}
+
+function hideDownloadBanner() {
+  var el = document.getElementById('img-download-sec');
+  if (el) { el.style.display = 'none'; el.innerHTML = ''; }
+}
+
+// ─── SETTINGS ─────────────────────────────────────────────────────────────────
+function openSettingsModal() {
+  document.getElementById('script-url-input').value  = APPS_SCRIPT_URL  || '';
+  document.getElementById('image-server-input').value = IMAGE_SERVER_URL || '';
+  document.getElementById('conn-status').textContent = '';
+  document.getElementById('settings-modal').style.display = 'flex';
+}
+function saveScriptUrl() {
+  var scriptUrl = document.getElementById('script-url-input').value.trim();
+  var imgUrl    = document.getElementById('image-server-input').value.trim();
+  APPS_SCRIPT_URL  = scriptUrl;
+  IMAGE_SERVER_URL = imgUrl;
+  localStorage.setItem('fp_script_url', scriptUrl);
+  localStorage.setItem('fp_image_server_url', imgUrl);
+  document.getElementById('setup-banner').style.display = scriptUrl ? 'none' : 'block';
+  closeModal('settings-modal');
+  showToast('Settings saved ✓', 'success');
+}
+var REQUIRED_VERSION = 4;
+function testConnection() {
+  var url = document.getElementById('script-url-input').value.trim();
+  var statusEl = document.getElementById('conn-status');
+  if (!url) { statusEl.textContent = 'Enter a URL first.'; return; }
+  statusEl.style.color = 'var(--muted)';
+  statusEl.textContent = 'Testing connection…';
+  fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: 'ping' }),
+    redirect: 'follow'
+  })
+  .then(function(r) { return r.text(); })
+  .then(function(text) {
+    try { return JSON.parse(text); } catch(e) { return { ok: true }; }
+  })
+  .then(function(d) {
+    if (d.version && d.version < REQUIRED_VERSION) {
+      statusEl.style.color = 'var(--warn)';
+      statusEl.textContent = '⚠ Script is v'+d.version+' — please redeploy with latest code (v'+REQUIRED_VERSION+' needed)';
+    } else {
+      statusEl.style.color = 'var(--success)';
+      statusEl.textContent = '✓ Connected — ' + (d.message || 'API running');
+    }
+  })
+  .catch(function(e) {
+    statusEl.style.color = 'var(--danger)';
+    statusEl.textContent = '✗ Failed: ' + e.message;
+  });
+}
+function openGuideModal() {
+  document.getElementById('cal-guide-modal').style.display = 'flex';
+}
+function closeModal(id, e) {
+  if (!e || e.target === document.getElementById(id))
+    document.getElementById(id).style.display = 'none';
+}
+
+// ─── INIT ──────────────────────────────────────────────────────────────────────
+(function init(){
+  var saved=localStorage.getItem('fp_user');
+  if(saved){
+    try{ U=JSON.parse(saved); startMain(); }
+    catch(ex){ localStorage.removeItem('fp_user'); }
+  }
+})();
+</script>
+</body>
+</html>
