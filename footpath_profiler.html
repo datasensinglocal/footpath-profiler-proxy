@@ -364,6 +364,18 @@ td.hi{color:white;font-weight:700;}
         <option>Pixel 7</option>
         <option>Pixel 8</option>
         <option>Redmi Note 13</option>
+        <option>iPhone 16</option>
+        <option>iPhone 16 Pro</option>
+        <option>Samsung Galaxy S25</option>
+        <option>OnePlus 13</option>
+        <option>Pixel 9</option>
+        <option>Redmi Note 13 Pro</option>
+        <option>Redmi Note 12</option>
+        <option>Poco X6</option>
+        <option>Poco F5</option>
+        <option>Realme 12 Pro</option>
+        <option>Vivo V30</option>
+        <option>iQOO Neo 9</option>
         <option value="custom">Other (type below)</option>
       </select>
       <input class="form-input" id="l-model-custom" type="text"
@@ -1809,7 +1821,15 @@ checkOAuthCallback();
 (function init(){
   var saved=localStorage.getItem('fp_user');
   if(saved){
-    try{ U=JSON.parse(saved); startMain(); }
+    try{
+      var u=JSON.parse(saved);
+      // Clear bad session where model was literally "Other (type below)"
+      if(!u.model || u.model==='Other (type below)' || u.model==='custom'){
+        localStorage.removeItem('fp_user');
+      } else {
+        U=u; startMain();
+      }
+    }
     catch(ex){ localStorage.removeItem('fp_user'); }
   }
 })();
