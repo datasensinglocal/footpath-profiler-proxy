@@ -1,4 +1,4 @@
-"""
+"""v2
 Footpath Profiler — Drive Upload Proxy
 Uses supportsAllDrives and uploadType=multipart to write into
 a folder owned by the service account's org, OR a folder that
