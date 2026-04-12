@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: footpath-profiler-proxy
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn server:app
+    envVars:
+      - key: DRIVE_FOLDER_ID
+        value: 1TJ3DiFYcMVRyX58CAh0LN5ZlEhyvXQXX
+      - key: ALLOWED_ORIGIN
+        value: "*"
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON
+        sync: false   # you paste this manually in Render dashboard
