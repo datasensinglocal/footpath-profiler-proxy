@@ -665,6 +665,14 @@ td.hi{color:white;font-weight:700;}
     <div class="modal-title">Settings</div>
 
     <div style="margin-bottom:14px;">
+      <div class="sec-lbl" style="margin-bottom:8px;">Google OAuth Client ID <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;">(for image upload)</span></div>
+      <input class="form-input" id="client-id-input" type="text"
+             placeholder="xxxxxx.apps.googleusercontent.com"
+             style="font-size:12px;">
+      <span class="form-hint">From Google Cloud Console → Credentials → OAuth 2.0 Client ID.</span>
+    </div>
+
+    <div style="margin-bottom:14px;">
       <div class="sec-lbl" style="margin-bottom:8px;">Google Apps Script URL <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;">(sheet data)</span></div>
       <input class="form-input" id="script-url-input" type="url"
              placeholder="https://script.google.com/macros/s/…/exec"
@@ -678,6 +686,19 @@ td.hi{color:white;font-weight:700;}
              placeholder="https://your-app.onrender.com"
              style="font-size:12px;">
       <span class="form-hint">Render proxy server that uploads images to Drive. See SETUP.md.</span>
+    </div>
+
+    <div style="margin-bottom:18px;">
+      <div class="sec-lbl" style="margin-bottom:8px;">Google Account <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;">(for image upload)</span></div>
+      <div id="google-auth-status" style="font-size:12px;color:var(--muted);margin-bottom:8px;">Not signed in — images won't upload to Drive</div>
+      <button onclick="signInWithGoogle()" id="google-signin-btn" style="
+        background:#4285f4;color:white;border:none;border-radius:8px;
+        padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer;
+        font-family:inherit;display:flex;align-items:center;gap:8px;width:100%;
+        justify-content:center;touch-action:manipulation;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+        Sign in with Google
+      </button>
     </div>
 
     <div style="display:flex;gap:8px;margin-bottom:18px;">
@@ -764,7 +785,9 @@ td.hi{color:white;font-weight:700;}
 <script>
 // ─── CONFIG ────────────────────────────────────────────────────────────────────
 // After deploying your Apps Script, paste the web app URL here:
-var DRIVE_FOLDER_ID = '1TJ3DiFYcMVRyX58CAh0LN5ZlEhyvXQXX';
+var DRIVE_FOLDER_ID  = '1TJ3DiFYcMVRyX58CAh0LN5ZlEhyvXQXX';
+var GOOGLE_CLIENT_ID = localStorage.getItem('fp_google_client_id') || '';
+var gAccessToken     = null; // set after OAuth login
 var SHEET_ID        = '1j3QSZFLKX4ADH0I80fic6P9p2fy8zs1nTd3Ip7iXHeg';
 // Loaded from localStorage so user can configure in-app
 var APPS_SCRIPT_URL    = localStorage.getItem('fp_script_url')    || '';
@@ -1593,27 +1616,110 @@ function showToast(msg,type) {
   _tt=setTimeout(function(){t.className='toast';},2600);
 }
 
-// ─── IMAGE SERVER UPLOAD ──────────────────────────────────────────────────────
-function uploadImageToServer(serverUrl, name, base64data) {
-  var url = serverUrl.replace(/\/+$/, '') + '/upload';
-  console.log('[FP] Uploading to:', url, 'name:', name, 'dataLen:', base64data ? base64data.length : 0);
-  return fetch(url, {
+// ─── GOOGLE OAUTH + DIRECT DRIVE UPLOAD ───────────────────────────────────────
+function signInWithGoogle() {
+  if (!GOOGLE_CLIENT_ID) {
+    showToast('Add your Google Client ID in Settings first', 'error');
+    return;
+  }
+  var redirect = window.location.href.split('?')[0].split('#')[0];
+  var scope = encodeURIComponent('https://www.googleapis.com/auth/drive.file');
+  var url = 'https://accounts.google.com/o/oauth2/v2/auth'
+    + '?client_id=' + encodeURIComponent(GOOGLE_CLIENT_ID)
+    + '&redirect_uri=' + encodeURIComponent(redirect)
+    + '&response_type=token'
+    + '&scope=' + scope;
+  window.location.href = url;
+}
+
+function checkOAuthCallback() {
+  var hash = window.location.hash;
+  if (!hash) return;
+  var params = {};
+  hash.substring(1).split('&').forEach(function(p) {
+    var kv = p.split('=');
+    params[kv[0]] = decodeURIComponent(kv[1] || '');
+  });
+  if (params.access_token) {
+    gAccessToken = params.access_token;
+    history.replaceState(null, '', window.location.pathname);
+    updateGoogleAuthStatus();
+    showToast('Google account connected ✓', 'success');
+  }
+}
+
+function updateGoogleAuthStatus() {
+  var el = document.getElementById('google-auth-status');
+  var btn = document.getElementById('google-signin-btn');
+  if (!el) return;
+  if (gAccessToken) {
+    el.style.color = 'var(--success)';
+    el.textContent = '✓ Signed in — images will upload to Drive';
+    if (btn) btn.textContent = 'Re-authenticate';
+  } else {
+    el.style.color = 'var(--muted)';
+    el.textContent = 'Not signed in — images won't upload to Drive';
+  }
+}
+
+function uploadImageToDrive(name, base64data) {
+  if (!gAccessToken) throw new Error('Not authenticated with Google');
+  var boundary = 'fp_boundary_' + Date.now();
+  var metadata = JSON.stringify({ name: name, parents: [DRIVE_FOLDER_ID] });
+  var imageBytes = atob(base64data);
+  var body = '--' + boundary + '
+'
+    + 'Content-Type: application/json
+
+'
+    + metadata + '
+'
+    + '--' + boundary + '
+'
+    + 'Content-Type: image/jpeg
+'
+    + 'Content-Transfer-Encoding: base64
+
+'
+    + base64data + '
+'
+    + '--' + boundary + '--';
+
+  return fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: name, data: base64data, folderId: '1TJ3DiFYcMVRyX58CAh0LN5ZlEhyvXQXX' })
+    headers: {
+      'Authorization': 'Bearer ' + gAccessToken,
+      'Content-Type': 'multipart/related; boundary=' + boundary
+    },
+    body: body
   })
   .then(function(r) {
-    console.log('[FP] Upload response status:', r.status);
+    if (r.status === 401) { gAccessToken = null; updateGoogleAuthStatus(); throw new Error('Token expired — please sign in again via ⚙ Settings'); }
+    if (!r.ok) return r.text().then(function(t){ throw new Error('Drive API: ' + r.status + ' ' + t); });
     return r.json();
   })
   .then(function(d) {
-    console.log('[FP] Upload response data:', JSON.stringify(d));
+    // Make public
+    return fetch('https://www.googleapis.com/drive/v3/files/' + d.id + '/permissions', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + gAccessToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'anyone', role: 'reader' })
+    }).then(function() { return d; });
+  });
+}
+
+// Keep old server upload as fallback
+function uploadImageToServer(serverUrl, name, base64data) {
+  var url = serverUrl.replace(/\/+$/, '') + '/upload';
+  return fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: name, data: base64data, folderId: DRIVE_FOLDER_ID })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
     if (!d.ok) throw new Error(d.error || 'Server error');
     return d;
-  })
-  .catch(function(err) {
-    console.error('[FP] Upload error:', err.message);
-    throw err;
   });
 }
 
@@ -1638,18 +1744,23 @@ function hideDownloadBanner() {
 
 // ─── SETTINGS ─────────────────────────────────────────────────────────────────
 function openSettingsModal() {
-  document.getElementById('script-url-input').value  = APPS_SCRIPT_URL  || '';
-  document.getElementById('image-server-input').value = IMAGE_SERVER_URL || '';
+  document.getElementById('script-url-input').value  = APPS_SCRIPT_URL    || '';
+  document.getElementById('image-server-input').value = IMAGE_SERVER_URL  || '';
+  document.getElementById('client-id-input').value    = GOOGLE_CLIENT_ID  || '';
   document.getElementById('conn-status').textContent = '';
+  updateGoogleAuthStatus();
   document.getElementById('settings-modal').style.display = 'flex';
 }
 function saveScriptUrl() {
-  var scriptUrl = document.getElementById('script-url-input').value.trim();
-  var imgUrl    = document.getElementById('image-server-input').value.trim();
+  var scriptUrl  = document.getElementById('script-url-input').value.trim();
+  var imgUrl     = document.getElementById('image-server-input').value.trim();
+  var clientId   = document.getElementById('client-id-input').value.trim();
   APPS_SCRIPT_URL  = scriptUrl;
   IMAGE_SERVER_URL = imgUrl;
+  GOOGLE_CLIENT_ID = clientId;
   localStorage.setItem('fp_script_url', scriptUrl);
   localStorage.setItem('fp_image_server_url', imgUrl);
+  localStorage.setItem('fp_google_client_id', clientId);
   document.getElementById('setup-banner').style.display = scriptUrl ? 'none' : 'block';
   closeModal('settings-modal');
   showToast('Settings saved ✓', 'success');
@@ -1694,6 +1805,7 @@ function closeModal(id, e) {
 }
 
 // ─── INIT ──────────────────────────────────────────────────────────────────────
+checkOAuthCallback();
 (function init(){
   var saved=localStorage.getItem('fp_user');
   if(saved){
