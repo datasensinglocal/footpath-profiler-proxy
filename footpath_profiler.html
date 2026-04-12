@@ -857,12 +857,22 @@ function loadFile(e) {
   var f = e.target.files[0]; if (!f) return;
   S.imgMimeType = f.type || 'image/jpeg';
 
-  var reader = new FileReader();
-  reader.onload = function(re) {
-    S.rawImgB64 = re.result; // full data URL with base64
-    var url = URL.createObjectURL(f);
-    var im = new Image();
-    im.onload = function() {
+  var url = URL.createObjectURL(f);
+  var im = new Image();
+  im.onload = function() {
+    // Compress to max 1200px at load time so rawImgB64 is always small enough to store
+    var MAX = 1200, Q = 0.82;
+    var w = im.naturalWidth, h = im.naturalHeight;
+    if (w > MAX || h > MAX) {
+      if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+      else       { w = Math.round(w * MAX / h); h = MAX; }
+    }
+    var c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    c.getContext('2d').drawImage(im, 0, 0, w, h);
+    S.rawImgB64 = c.toDataURL('image/jpeg', Q);
+    S.imgMimeType = 'image/jpeg';
+    console.log('[FP] Image stored, size:', S.rawImgB64.length);
       var wrap = document.getElementById('vwrap');
       S.W = wrap.clientWidth;
       S.H = Math.floor(S.W * im.naturalHeight / im.naturalWidth);
@@ -907,9 +917,8 @@ function loadFile(e) {
       redraw();
       e.target.value = '';
     };
-    im.src = url;
   };
-  reader.readAsDataURL(f);
+  im.src = url;
 }
 
 function openReplaceMenu()  { document.getElementById('replace-modal').style.display='flex'; }
