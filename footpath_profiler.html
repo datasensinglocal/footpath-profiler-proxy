@@ -851,7 +851,7 @@ td.hi{color:white;font-weight:700;}
 // ─── CONFIG ────────────────────────────────────────────────────────────────────
 // After deploying your Apps Script, paste the web app URL here:
 var DRIVE_FOLDER_ID  = '1TJ3DiFYcMVRyX58CAh0LN5ZlEhyvXQXX';
-var GOOGLE_CLIENT_ID = localStorage.getItem('fp_google_client_id') || '';
+var GOOGLE_CLIENT_ID = localStorage.getItem('fp_google_client_id') || '969584887609-3ou0o02hdjscm428bld60i0ed942c10p.apps.googleusercontent.com';
 var gAccessToken     = null; // set after OAuth login
 var SHEET_ID        = '1j3QSZFLKX4ADH0I80fic6P9p2fy8zs1nTd3Ip7iXHeg';
 // Loaded from localStorage so user can configure in-app
@@ -1834,6 +1834,8 @@ function signInWithGoogle() {
     return;
   }
   var redirect = window.location.href.split('?')[0].split('#')[0];
+  console.log('[FP] OAuth redirect URI:', redirect);
+  console.log('[FP] OAuth client ID:', GOOGLE_CLIENT_ID);
   var scope = encodeURIComponent('https://www.googleapis.com/auth/drive.file');
   var url = 'https://accounts.google.com/o/oauth2/v2/auth'
     + '?client_id=' + encodeURIComponent(GOOGLE_CLIENT_ID)
