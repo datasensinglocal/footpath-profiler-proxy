@@ -494,6 +494,24 @@ td.hi{color:white;font-weight:700;}
       <span class="flbl">Footpath width (mm)</span>
       <div class="vpill"><span class="vval" id="w-val">—</span></div>
     </div>
+    <!-- Manual measurement comparison row -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:2px;padding:10px 0 6px;border-top:1px solid var(--border);">
+      <div style="display:flex;flex-direction:column;gap:3px;">
+        <span class="flbl">Tape measure (mm)</span>
+        <span style="font-size:10px;color:var(--muted);">optional — for calibration</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <input id="manual-mm" type="number" placeholder="e.g. 1200"
+          style="width:110px;background:var(--surface);border:1.5px solid var(--border);
+          border-radius:10px;padding:8px 12px;color:var(--text);font-size:20px;
+          font-weight:800;font-family:monospace;text-align:right;outline:none;
+          -webkit-appearance:none;"
+          oninput="updateDiff()">
+        <div id="diff-badge" style="display:none;font-size:11px;font-weight:700;
+          padding:4px 10px;border-radius:20px;white-space:nowrap;"></div>
+      </div>
+    </div>
+
     <div class="ftr-r2">
       <!-- 4-way focal point nudge pad -->
       <div style="display:grid;grid-template-columns:repeat(3,36px);grid-template-rows:repeat(3,36px);gap:4px;">
@@ -1348,6 +1366,27 @@ function toggleMat(id) {
 }
 
 // ─── GRADE ─────────────────────────────────────────────────────────────────────
+// ─── MANUAL MEASUREMENT DIFF ───────────────────────────────────────────────────
+function updateDiff() {
+  var manual = parseInt(document.getElementById('manual-mm').value);
+  var calc   = widthMM();
+  var badge  = document.getElementById('diff-badge');
+  if (!manual || !calc) { badge.style.display = 'none'; return; }
+  var diff    = manual - calc;
+  var pct     = Math.round(Math.abs(diff) / manual * 100);
+  var over    = diff > 0;
+  badge.style.display   = 'inline-block';
+  badge.style.background = pct <= 5  ? 'rgba(34,197,94,0.15)'  :
+                            pct <= 15 ? 'rgba(253,211,77,0.15)' :
+                                        'rgba(239,68,68,0.15)';
+  badge.style.color      = pct <= 5  ? 'var(--success)'  :
+                            pct <= 15 ? 'var(--warn)'     :
+                                        'var(--danger)';
+  badge.style.border     = '1px solid ' + (pct <= 5 ? 'rgba(34,197,94,0.3)' :
+                            pct <= 15 ? 'rgba(253,211,77,0.3)' : 'rgba(239,68,68,0.3)');
+  badge.textContent = (over ? '+' : '') + diff + 'mm (' + pct + '%)';
+}
+
 function grade(mm) {
   if(mm<900)  return{l:'narrow',    c:'#fca5a5'};
   if(mm<1800) return{l:'marginal',  c:'#fcd34d'};
@@ -1408,8 +1447,9 @@ async function submitRecord() {
   var annotatedB64=null;
   try{annotatedB64=await captureAnnotated();}catch(ex){}
 
+  var manualMM = parseInt(document.getElementById('manual-mm').value) || null;
   var rec={
-    id, side:sd, mm, grade:g.l, material:mats,
+    id, side:sd, mm, manualMM, grade:g.l, material:mats,
     lat:S.lat||'', lng:S.lng||'',
     time:now.toISOString(), surveyor:U.name,
     phone:U.phone, model:U.model
@@ -1534,6 +1574,8 @@ function resetForNext() {
   document.getElementById('hint').style.display         ='none';
   document.getElementById('w-val').textContent          ='—';
   S.imgLoaded=false; S.rawImgB64=null;
+  var mi=document.getElementById('manual-mm'); if(mi){mi.value='';}
+  var db=document.getElementById('diff-badge'); if(db){db.style.display='none';}
   S.selMats.clear();
   ['paver','cement','mud'].forEach(function(m){
     document.getElementById('mat-'+m).classList.remove('sel');
