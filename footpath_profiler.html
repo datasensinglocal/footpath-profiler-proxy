@@ -866,7 +866,7 @@ var S = {
   wBx:0, kBx:0, wZY:0, kMY:0,
   wLocked:false, kLocked:false,
   // Property line (building offset) — activated by tapping corner knob
-  pActive:false, pBx:0, pZY:0, pLocked:false, pLockedExit:null,
+  pActive:false, pBx:0, pZY:0, pLocked:false, pLockedExit:null, pLockedBx:null, pLockedZY:null,
   eyeH:1200, scaleFactor:1.0, focal:0,
   drag:null, _lp:{x:0,y:0}, startP:{x:0,y:0}, moved:false,
   recs:[], imgLoaded:false,
@@ -981,7 +981,7 @@ function loadFile(e) {
       S.kBx = clampBx(S.kBx, S.kMY);
       S.wLocked = false; S.kLocked = false;
       // Reset property line — stays inactive for each new image
-      S.pActive = false; S.pLocked = false; S.pLockedExit = null;
+      S.pActive = false; S.pLocked = false; S.pLockedExit = null; S.pLockedBx = null; S.pLockedZY = null;
       S.pBx = S.W * 0.5; S.pZY = S.H * 0.4; // default position (top-centre)
 
       var svg = document.getElementById('svg');
@@ -1230,10 +1230,36 @@ function onPU(e) {
   var isTap = (Date.now() - S._t) < 600;
 
   if (S.drag && S.drag!=='pan' && isTap) {
-    if      (S.drag==='vp') { S.vp.locked=!S.vp.locked; }
-    else if (S.drag==='w')  { S.wLocked=!S.wLocked; }
-    else if (S.drag==='k')  { S.kLocked=!S.kLocked; }
-    else if (S.drag==='p')  { S.pLocked=!S.pLocked; }
+    if (S.drag==='vp') {
+      S.vp.locked = !S.vp.locked;
+    } else if (S.drag==='w') {
+      S.wLocked = !S.wLocked;
+      if (S.wLocked) {
+        var ep = exitPoint(S.wBx);
+        S.wLockedExit = {x:ep.x, y:ep.y};
+        S.wLockedBx = S.wBx; S.wLockedZY = S.wZY;
+      } else {
+        S.wLockedExit = null; S.wLockedBx = null;
+      }
+    } else if (S.drag==='k') {
+      S.kLocked = !S.kLocked;
+      if (S.kLocked) {
+        var ep2 = exitPoint(S.kBx);
+        S.kLockedExit = {x:ep2.x, y:ep2.y};
+        S.kLockedBx = S.kBx; S.kLockedMY = S.kMY;
+      } else {
+        S.kLockedExit = null; S.kLockedBx = null;
+      }
+    } else if (S.drag==='p') {
+      S.pLocked = !S.pLocked;
+      if (S.pLocked) {
+        var ep3 = exitPoint(S.pBx);
+        S.pLockedExit = {x:ep3.x, y:ep3.y};
+        S.pLockedBx = S.pBx; S.pLockedZY = S.pZY;
+      } else {
+        S.pLockedExit = null; S.pLockedBx = null; S.pLockedZY = null;
+      }
+    }
     redraw(); updateLockBtns();
   }
   if (Object.keys(_ptrs).length===0) { S.drag=null; S.moved=false; }
@@ -1254,7 +1280,14 @@ function redraw() {
   var mm=widthMM();
   document.getElementById('w-val').textContent    = mm||'—';
   document.getElementById('side-lbl').textContent = S.wBx>S.kBx?'R':'L';
-  var p0=exitPoint(S.wBx), p1=exitPoint(S.kBx);
+  // Use frozen bx when locked so line angle can't drift
+  var wBxDraw = (S.wLocked && S.wLockedBx != null) ? S.wLockedBx : S.wBx;
+  var kBxDraw = (S.kLocked && S.kLockedBx != null) ? S.kLockedBx : S.kBx;
+  var wZYDraw = (S.wLocked && S.wLockedZY != null) ? S.wLockedZY : S.wZY;
+  var kMYDraw = (S.kLocked && S.kLockedMY != null) ? S.kLockedMY : S.kMY;
+
+  var p0 = (S.wLocked && S.wLockedExit) ? S.wLockedExit : exitPoint(wBxDraw);
+  var p1 = (S.kLocked && S.kLockedExit) ? S.kLockedExit : exitPoint(kBxDraw);
 
   // isc = inverse scale: counter-scale UI elements so they stay constant screen size
   var isc = 1 / Z.scale;
@@ -1269,13 +1302,13 @@ function redraw() {
   for(var z=1000;z<=12000;z+=1000){
     var py=S.vp.y+(S.focal*S.eyeH/z);
     if(py>S.vp.y&&py<=S.H)
-      grid+='<line x1="'+lineX(S.wBx,py)+'" y1="'+py
-           +'" x2="'+lineX(S.kBx,py)+'" y2="'+py
+      grid+='<line x1="'+lineX(wBxDraw,py)+'" y1="'+py
+           +'" x2="'+lineX(kBxDraw,py)+'" y2="'+py
            +'" stroke="white" stroke-width="'+(1*isc).toFixed(2)+'" opacity="0.2"/>';
   }
   document.getElementById('g-grid').innerHTML=grid;
 
-  var bLeft=S.wBx<S.kBx, wLW=130, kLW=100;
+  var bLeft=wBxDraw<kBxDraw, wLW=130, kLW=100;
   var wLX=bLeft?32:-(wLW+32);
   var kLX=bLeft?-(kLW+32):32;
   var u='';
@@ -1292,7 +1325,7 @@ function redraw() {
   var dash_guide = (8*isc)+','+(5*isc);
   var dash_w     = (4*isc)+' '+(3*isc);
 
-  // Perspective guide lines — counter-scaled stroke & dash
+  // Perspective guide lines — draw to frozen exit point when locked
   u+='<line x1="'+S.vp.x+'" y1="'+S.vp.y+'" x2="'+p0.x+'" y2="'+p0.y
     +'" stroke="#f59e0b" stroke-width="'+(S.wLocked?sw_thick:sw_line)+'" '
     +(S.wLocked?'':'stroke-dasharray="'+dash_guide+'" ')+'opacity="'+(S.wLocked?1:0.8)+'"/>';
@@ -1300,8 +1333,10 @@ function redraw() {
     +'" stroke="#2dd4bf" stroke-width="'+(S.kLocked?sw_thick:sw_line)+'" '
     +(S.kLocked?'':'stroke-dasharray="'+dash_guide+'" ')+'opacity="'+(S.kLocked?1:0.8)+'"/>';
 
-  // Width indicator line
-  u+='<line x1="'+wXc+'" y1="'+S.kMY+'" x2="'+kXc+'" y2="'+S.kMY
+  // Width indicator — use frozen y and x positions when locked
+  var wXcDraw = lineX(wBxDraw, kMYDraw);
+  var kXcDraw = lineX(kBxDraw, kMYDraw);
+  u+='<line x1="'+wXcDraw+'" y1="'+kMYDraw+'" x2="'+kXcDraw+'" y2="'+kMYDraw
     +'" stroke="white" stroke-width="'+sw_width+'" stroke-dasharray="'+dash_w+'" opacity="0.5"/>';
 
   // Helper: counter-scaled group at a point
@@ -1331,7 +1366,8 @@ function redraw() {
       +'<line x1="-12" y1="-12" x2="12" y2="12" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>'
       +'<line x1="12" y1="-12" x2="-12" y2="12" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>'
       +'</g>';
-    u+='<g transform="translate('+wXz+','+S.wZY+') scale('+sc+')" opacity="0.4" fill="#f59e0b">'
+    var wXzDraw = lineX(wBxDraw, wZYDraw);
+    u+='<g transform="translate('+wXzDraw+','+wZYDraw+') scale('+sc+')" opacity="0.4" fill="#f59e0b">'
       +'<circle r="24" fill="inherit" stroke="white" stroke-width="2"/>'
       +lockIcon(true)+'</g>';
   } else {
@@ -1366,36 +1402,38 @@ function redraw() {
 
   // ── Property line handle (purple) — only when active ──
   if (S.pActive) {
-    var pXz2 = lineX(S.pBx, S.pZY);
-    var pp0  = exitPoint(S.pBx);
-    var pLW  = 120;
-    var pLX  = S.pBx < S.wBx ? 32 : -(pLW+32);
+    // Use frozen values when locked
+    var pBxDraw = (S.pLocked && S.pLockedBx != null) ? S.pLockedBx : S.pBx;
+    var pZYDraw = (S.pLocked && S.pLockedZY != null) ? S.pLockedZY : S.pZY;
+    var pp0     = (S.pLocked && S.pLockedExit) ? S.pLockedExit : exitPoint(pBxDraw);
+    var pXz2    = lineX(pBxDraw, pZYDraw);
+    var pLW     = 120;
+    var pLX     = pBxDraw < wBxDraw ? 32 : -(pLW+32);
 
-    // Guide line from VP to frame
+    // Guide line from VP to frozen frame exit
     u+='<line x1="'+S.vp.x+'" y1="'+S.vp.y+'" x2="'+pp0.x+'" y2="'+pp0.y
       +'" stroke="#a855f7" stroke-width="'+(S.pLocked?sw_thick:sw_line)+'" '
       +(S.pLocked?'':'stroke-dasharray="'+dash_guide+'" ')+'opacity="'+(S.pLocked?1:0.8)+'"/>';
 
-    // Offset width indicator line at building edge y
-    var pXatW = lineX(S.pBx, S.wZY);
-    var wXatW = lineX(S.wBx, S.wZY);
-    u+='<line x1="'+pXatW+'" y1="'+S.wZY+'" x2="'+wXatW+'" y2="'+S.wZY
+    // Offset width indicator — use frozen building edge y when w is locked
+    var pXatW = lineX(pBxDraw, wZYDraw);
+    var wXatW = lineX(wBxDraw, wZYDraw);
+    u+='<line x1="'+pXatW+'" y1="'+wZYDraw+'" x2="'+wXatW+'" y2="'+wZYDraw
       +'" stroke="#a855f7" stroke-width="'+sw_width+'" stroke-dasharray="'+dash_w+'" opacity="0.6"/>';
 
-    // Handle — locked = X, unlocked = circle with label
-    var pExit2 = (S.pLocked && S.pLockedExit) ? S.pLockedExit : pp0;
+    // Handle — locked = X at frozen exit, unlocked = circle with label
     if (S.pLocked) {
-      u+='<g transform="translate('+pExit2.x.toFixed(1)+','+pExit2.y.toFixed(1)+') scale('+sc+')">'
+      u+='<g transform="translate('+pp0.x.toFixed(1)+','+pp0.y.toFixed(1)+') scale('+sc+')">'
         +'<line x1="-12" y1="-12" x2="12" y2="12" stroke="#a855f7" stroke-width="3.5" stroke-linecap="round"/>'
         +'<line x1="12" y1="-12" x2="-12" y2="12" stroke="#a855f7" stroke-width="3.5" stroke-linecap="round"/>'
         +'<line x1="-12" y1="-12" x2="12" y2="12" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>'
         +'<line x1="12" y1="-12" x2="-12" y2="12" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>'
         +'</g>';
-      u+='<g transform="translate('+pXz2+','+S.pZY+') scale('+sc+')" opacity="0.4" fill="#a855f7">'
+      u+='<g transform="translate('+pXz2+','+pZYDraw+') scale('+sc+')" opacity="0.4" fill="#a855f7">'
         +'<circle r="24" fill="inherit" stroke="white" stroke-width="2"/>'
         +lockIcon(true)+'</g>';
     } else {
-      u+='<g transform="translate('+pXz2+','+S.pZY+') scale('+sc+')" fill="#a855f7">'
+      u+='<g transform="translate('+pXz2+','+pZYDraw+') scale('+sc+')" fill="#a855f7">'
         +'<circle r="24" fill="inherit" stroke="white" stroke-width="3"/>'
         +lockIcon(false)
         +'<rect x="'+pLX+'" y="-16" width="'+pLW+'" height="32" rx="16" fill="#a855f7"/>'
@@ -1462,10 +1500,26 @@ function nudgeVP(dx, dy) {
   redraw();
 }
 function toggleLockW() {
-  S.wLocked=!S.wLocked; redraw(); updateLockBtns();
+  S.wLocked = !S.wLocked;
+  if (S.wLocked) {
+    var ep = exitPoint(S.wBx);
+    S.wLockedExit = {x:ep.x, y:ep.y};
+    S.wLockedBx = S.wBx; S.wLockedZY = S.wZY;
+  } else {
+    S.wLockedExit = null; S.wLockedBx = null;
+  }
+  redraw(); updateLockBtns();
 }
 function toggleLockK() {
-  S.kLocked=!S.kLocked; redraw(); updateLockBtns();
+  S.kLocked = !S.kLocked;
+  if (S.kLocked) {
+    var ep2 = exitPoint(S.kBx);
+    S.kLockedExit = {x:ep2.x, y:ep2.y};
+    S.kLockedBx = S.kBx; S.kLockedMY = S.kMY;
+  } else {
+    S.kLockedExit = null; S.kLockedBx = null;
+  }
+  redraw(); updateLockBtns();
 }
 function updateLockBtns() {
   var wb=document.getElementById('lock-w-btn');
@@ -1724,7 +1778,7 @@ function resetForNext() {
   var mi=document.getElementById('manual-mm'); if(mi){mi.value='';}
   var db=document.getElementById('diff-badge'); if(db){db.style.display='none';}
   // Reset property line
-  S.pActive=false; S.pLocked=false; S.pLockedExit=null;
+  S.pActive=false; S.pLocked=false; S.pLockedExit=null; S.pLockedBx=null; S.pLockedZY=null;
   var pk=document.getElementById('prop-knob'); if(pk){pk.style.display='none';}
   var pkb=document.getElementById('prop-knob-btn');
   if(pkb){pkb.style.background='rgba(168,85,247,0.18)';pkb.style.border='2px dashed rgba(168,85,247,0.45)';}
