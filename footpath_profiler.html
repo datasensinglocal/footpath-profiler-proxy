@@ -1883,20 +1883,47 @@ function showToast(msg,type) {
 
 // ─── GOOGLE OAUTH + DIRECT DRIVE UPLOAD ───────────────────────────────────────
 function signInWithGoogle() {
-  if (!GOOGLE_CLIENT_ID) {
-    showToast('Add your Google Client ID in Settings first', 'error');
-    return;
-  }
   var redirect = window.location.href.split('?')[0].split('#')[0];
-  console.log('[FP] OAuth redirect URI:', redirect);
-  console.log('[FP] OAuth client ID:', GOOGLE_CLIENT_ID);
   var scope = encodeURIComponent('https://www.googleapis.com/auth/drive.file');
   var url = 'https://accounts.google.com/o/oauth2/v2/auth'
     + '?client_id=' + encodeURIComponent(GOOGLE_CLIENT_ID)
     + '&redirect_uri=' + encodeURIComponent(redirect)
     + '&response_type=token'
-    + '&scope=' + scope;
+    + '&scope=' + scope
+    + '&prompt=consent';
   window.location.href = url;
+}
+
+function silentRefreshToken() {
+  // Try to get a fresh token using prompt=none (silent, no user interaction)
+  // If user is already signed in to Google, this works without redirecting
+  var redirect = window.location.href.split('?')[0].split('#')[0];
+  var scope = encodeURIComponent('https://www.googleapis.com/auth/drive.file');
+  var url = 'https://accounts.google.com/o/oauth2/v2/auth'
+    + '?client_id=' + encodeURIComponent(GOOGLE_CLIENT_ID)
+    + '&redirect_uri=' + encodeURIComponent(redirect)
+    + '&response_type=token'
+    + '&scope=' + scope
+    + '&prompt=none';
+  var iframe = document.createElement('iframe');
+  iframe.style.display = 'none';
+  iframe.src = url;
+  iframe.onload = function() {
+    try {
+      var hash = iframe.contentWindow.location.hash;
+      var params = {};
+      hash.substring(1).split('&').forEach(function(p) {
+        var kv = p.split('=');
+        params[kv[0]] = decodeURIComponent(kv[1] || '');
+      });
+      if (params.access_token) {
+        gAccessToken = params.access_token;
+        updateGoogleAuthStatus();
+      }
+    } catch(e) {}
+    document.body.removeChild(iframe);
+  };
+  document.body.appendChild(iframe);
 }
 
 function checkOAuthCallback() {
@@ -1956,7 +1983,9 @@ function uploadImageToDrive(name, base64data) {
     if (r.status === 401) {
       gAccessToken = null;
       updateGoogleAuthStatus();
-      throw new Error('Google token expired — tap ⚙ Settings → Sign in again');
+      // Show re-auth button directly in status
+      setStatus('Google token expired — <a onclick="openSettingsModal()" style="color:var(--accent);cursor:pointer;">tap here to sign in again</a>', 'err');
+      throw new Error('Token expired');
     }
     if (!r.ok) return r.text().then(function(t) { throw new Error('Drive error ' + r.status + ': ' + t); });
     return r.json();
@@ -2070,6 +2099,11 @@ function closeModal(id, e) {
 
 // ─── INIT ──────────────────────────────────────────────────────────────────────
 checkOAuthCallback();
+// Auto-refresh Google token every 45 minutes so user never has to sign in again
+setInterval(function() {
+  if (gAccessToken) silentRefreshToken();
+}, 45 * 60 * 1000);
+
 (function init(){
   var saved=localStorage.getItem('fp_user');
   if(saved){
