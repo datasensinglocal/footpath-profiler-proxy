@@ -851,7 +851,7 @@ td.hi{color:white;font-weight:700;}
 <script>
 // ─── CONFIG ────────────────────────────────────────────────────────────────────
 // After deploying your Apps Script, paste the web app URL here:
-var DRIVE_FOLDER_ID  = '1nsOnn9eP1P1aumz6bdxEwQHDu3a0KzG5';
+var DRIVE_FOLDER_ID  = '1TJ3DiFYcMVRyX58CAh0LN5ZlEhyvXQXX';
 var GOOGLE_CLIENT_ID = localStorage.getItem('fp_google_client_id') || '969584887609-3ou0o02hdjscm428bld60i0ed942c10p.apps.googleusercontent.com';
 var gAccessToken     = null; // set after OAuth login
 var SHEET_ID        = '1j3QSZFLKX4ADH0I80fic6P9p2fy8zs1nTd3Ip7iXHeg';
@@ -2025,7 +2025,7 @@ function showDownloadBanner(rawB64, annB64, name) {
   }
   el.style.display = 'block';
   el.innerHTML = '<div style="background:rgba(59,130,246,0.07);border:1px solid rgba(59,130,246,0.2);border-radius:10px;padding:12px 14px;">'
-    + '<div style="font-size:11px;color:#93b4d8;margin-bottom:8px;">Save images to <a href="https://drive.google.com/drive/folders/1nsOnn9eP1P1aumz6bdxEwQHDu3a0KzG5" target="_blank" style="color:var(--accent);">Drive folder</a> manually:</div>'
+    + '<div style="font-size:11px;color:#93b4d8;margin-bottom:8px;">Save images to <a href="https://drive.google.com/drive/folders/1TJ3DiFYcMVRyX58CAh0LN5ZlEhyvXQXX" target="_blank" style="color:var(--accent);">Drive folder</a> manually:</div>'
     + '<div>' + dlLink(rawB64, name+'_raw.jpg', 'Raw') + dlLink(annB64, name+'_annotated.jpg', 'Annotated') + '</div>'
     + '</div>';
 }

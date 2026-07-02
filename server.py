@@ -1,34 +1,33 @@
-"""v2
+"""v3
 Footpath Profiler — Drive Upload Proxy
-Uses supportsAllDrives and uploadType=multipart to write into
-a folder owned by the service account's org, OR a folder that
-has been shared with the service account as Editor.
-
-Key fix: pass supportsAllDrives=True so the API accepts
-shared-with-me folders, and use a direct multipart upload
-instead of the Files.create helper which triggers quota check.
+Uses a stored OAuth refresh token for a personal Google account,
+so uploads count against that account's storage quota (not a service account).
 """
 
-import os, json, base64, tempfile, logging, requests
+import os, json, base64, logging, requests
 from flask import Flask, request, jsonify, make_response
-from google.oauth2 import service_account
-from google.auth.transport.requests import Request as GoogleRequest
 
 logging.basicConfig(level=logging.INFO)
 app = Flask(__name__)
 
-SCOPES    = ['https://www.googleapis.com/auth/drive']
 FOLDER_ID = os.environ.get('DRIVE_FOLDER_ID', '1TJ3DiFYcMVRyX58CAh0LN5ZlEhyvXQXX')
 
 
 def get_token():
-    raw = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON')
-    if not raw:
-        raise RuntimeError('GOOGLE_SERVICE_ACCOUNT_JSON not set')
-    creds = service_account.Credentials.from_service_account_info(
-        json.loads(raw), scopes=SCOPES)
-    creds.refresh(GoogleRequest())
-    return creds.token
+    client_id     = os.environ.get('GOOGLE_CLIENT_ID')
+    client_secret = os.environ.get('GOOGLE_CLIENT_SECRET')
+    refresh_token = os.environ.get('GOOGLE_REFRESH_TOKEN')
+    if not all([client_id, client_secret, refresh_token]):
+        raise RuntimeError('GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REFRESH_TOKEN must all be set')
+    resp = requests.post('https://oauth2.googleapis.com/token', data={
+        'client_id':     client_id,
+        'client_secret': client_secret,
+        'refresh_token': refresh_token,
+        'grant_type':    'refresh_token',
+    })
+    if not resp.ok:
+        raise RuntimeError('Failed to refresh token: ' + resp.text)
+    return resp.json()['access_token']
 
 
 def cors_response(data, status=200):
@@ -68,14 +67,13 @@ def upload():
         image_bytes = base64.b64decode(data)
         token = get_token()
 
-        # Use multipart upload directly via requests — avoids service account quota issue
         metadata = json.dumps({'name': name, 'parents': [folder]})
         files = {
             'metadata': ('metadata', metadata, 'application/json'),
             'file':     ('file',     image_bytes, 'image/jpeg')
         }
         resp = requests.post(
-            'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,webViewLink',
+            'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink',
             headers={'Authorization': 'Bearer ' + token},
             files=files
         )
@@ -84,14 +82,13 @@ def upload():
             logging.error(f"Drive API error: {resp.text}")
             return cors_response({'ok': False, 'error': resp.text}, 500)
 
-        result = resp.json()
+        result  = resp.json()
         file_id = result.get('id')
 
-        # Make file public
+        # Make file publicly readable
         requests.post(
-            f'https://www.googleapis.com/drive/v3/files/{file_id}/permissions?supportsAllDrives=true',
-            headers={'Authorization': 'Bearer ' + token,
-                     'Content-Type': 'application/json'},
+            f'https://www.googleapis.com/drive/v3/files/{file_id}/permissions',
+            headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'},
             json={'type': 'anyone', 'role': 'reader'}
         )
 
