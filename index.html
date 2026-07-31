@@ -116,10 +116,10 @@ body{
 /* ── IMAGE AREA ── */
 .vwrap{
   position:relative;width:94%;margin:12px auto;
-  background:#020817;border-radius:var(--r);overflow:hidden;
-  border:1px solid var(--border);flex-shrink:0;touch-action:none;
+  background:#000;border-radius:var(--r);overflow:hidden;
+  border:1px solid var(--border);flex-shrink:0;touch-action:pan-y;
 }
-#svg{display:block;touch-action:none;width:100%;height:auto;}
+#svg{display:block;touch-action:pan-y;width:100%;height:auto;}
 .empty{
   min-height:280px;display:flex;flex-direction:column;
   align-items:center;justify-content:center;
@@ -343,43 +343,32 @@ td.hi{color:white;font-weight:700;}
         <input class="form-input" id="l-name" type="text" placeholder="e.g. Ravi Kumar" autocomplete="name">
       </div>
       <div class="form-group">
-        <label class="form-label">Phone Number</label>
-        <input class="form-input" id="l-phone" type="tel" placeholder="9876543210">
+        <label class="form-label">Email</label>
+        <input class="form-input" id="l-email" type="email" placeholder="you@example.com" autocomplete="email">
       </div>
     </div>
 
-    <div class="form-group">
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Phone Number</label>
+        <input class="form-input" id="l-phone" type="tel" placeholder="9876543210">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Your Height (cm)</label>
+        <input class="form-input" id="l-height" type="number" placeholder="e.g. 170">
+      </div>
+    </div>
+
+    <div class="form-group" style="position:relative;">
       <label class="form-label">Phone Model</label>
-      <select class="form-select" id="l-model" onchange="modelChanged()">
-        <option value="">Select model…</option>
-        <option>iPhone 13</option>
-        <option>iPhone 14</option>
-        <option>iPhone 14 Pro</option>
-        <option>iPhone 15</option>
-        <option>iPhone 15 Pro</option>
-        <option>Samsung Galaxy S23</option>
-        <option>Samsung Galaxy S24</option>
-        <option>OnePlus 11</option>
-        <option>OnePlus 12</option>
-        <option>Pixel 7</option>
-        <option>Pixel 8</option>
-        <option>Redmi Note 13</option>
-        <option>iPhone 16</option>
-        <option>iPhone 16 Pro</option>
-        <option>Samsung Galaxy S25</option>
-        <option>OnePlus 13</option>
-        <option>Pixel 9</option>
-        <option>Redmi Note 13 Pro</option>
-        <option>Redmi Note 12</option>
-        <option>Poco X6</option>
-        <option>Poco F5</option>
-        <option>Realme 12 Pro</option>
-        <option>Vivo V30</option>
-        <option>iQOO Neo 9</option>
-        <option value="custom">Other (type below)</option>
-      </select>
-      <input class="form-input" id="l-model-custom" type="text"
-             placeholder="Enter your phone model" style="display:none;margin-top:8px;">
+      <input class="form-input" id="l-model" type="text" autocomplete="off"
+             placeholder="Start typing… e.g. Redmi Note 13"
+             oninput="onModelInput()" onfocus="onModelInput()"
+             onblur="setTimeout(hideModelSuggestions,150)">
+      <div id="l-model-suggestions" style="display:none;position:absolute;left:0;right:0;top:100%;
+           margin-top:4px;background:var(--card,#12182a);border:1px solid var(--border);
+           border-radius:8px;max-height:220px;overflow-y:auto;z-index:20;
+           box-shadow:0 8px 24px rgba(0,0,0,0.35);"></div>
     </div>
 
     <button class="btn-primary" onclick="doLogin()">Start Surveying →</button>
@@ -506,6 +495,15 @@ td.hi{color:white;font-weight:700;}
         </svg>
       </div>
       <div class="side-tag"><span id="side-lbl">R</span></div>
+    </div>
+
+    <!-- A4-sheet calibration panel (Method 2) — shown only while marking -->
+    <div id="a4-panel" style="display:none;position:absolute;bottom:10px;left:10px;right:10px;pointer-events:auto;z-index:6;">
+      <div style="background:rgba(12,18,32,0.92);backdrop-filter:blur(8px);border:1px solid rgba(232,121,249,0.4);border-radius:12px;padding:12px 14px;">
+        <div id="a4-panel-text" style="font-size:12px;color:#f0f4f8;margin-bottom:10px;line-height:1.4;">Tap the top-left corner of the A4 sheet.</div>
+        <div id="a4-panel-choices" style="display:none;"></div>
+        <button onclick="cancelA4Mode()" style="width:100%;background:transparent;border:1px solid rgba(255,255,255,0.15);color:#94a3b8;border-radius:8px;padding:7px;font-size:11px;cursor:pointer;touch-action:manipulation;font-family:inherit;">Cancel</button>
+      </div>
     </div>
   </div>
   <p class="hint" id="hint" style="display:none;">👆 tap a knob to lock it · drag to move</p>
@@ -675,32 +673,98 @@ td.hi{color:white;font-weight:700;}
     </div>
 
     <div class="form-group" style="margin-bottom:14px;">
-      <label class="form-label">Camera Height (mm)</label>
-      <input class="form-input" id="cal-eyeh-input" type="number" placeholder="1200" value="1200">
-      <span class="form-hint">Update if your shooting height changed</span>
+      <label class="form-label">Your Height (cm) <span style="color:var(--muted);font-weight:400;">(optional)</span></label>
+      <div style="display:flex;gap:8px;">
+        <input class="form-input" id="cal-height-input" type="number" placeholder="e.g. 170" style="flex:1;">
+        <button class="btn-secondary" style="flex:0 0 auto;padding:0 16px;" onclick="estimateEyeHFromHeight()">Estimate</button>
+      </div>
+      <span class="form-hint">Only needed for Method 1. Method 2 (A4 paper) calculates camera height automatically from the sheet's corners.</span>
     </div>
 
-    <div class="divider" style="margin-bottom:14px;">Reference calibration (optional)</div>
+    <div class="form-group" style="margin-bottom:14px;">
+      <label class="form-label">Camera Height (mm) <span style="color:var(--muted);font-weight:400;">(Method 1 only)</span></label>
+      <input class="form-input" id="cal-eyeh-input" type="number" placeholder="1200" value="1200">
+      <span class="form-hint">For Method 1 calibration. Method 2 (A4 paper) solves this automatically.</span>
+    </div>
+
+    <div class="divider" style="margin-bottom:14px;">Calibrate footpath scale</div>
+    <div class="form-hint" style="margin-bottom:10px;display:block;">Choose how to set the scale for this phone:</div>
+
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:6px;">
+      <button class="btn-secondary" style="width:100%;text-align:left;padding:14px;" onclick="chooseCalMethod(1)">
+        <strong style="display:block;font-size:13px;color:var(--text);margin-bottom:2px;">1 · I know the exact footpath width</strong>
+        <span style="font-size:11px;color:var(--muted);">Type in a measurement you've taken with a tape</span>
+      </button>
+      <button class="btn-secondary" style="width:100%;text-align:left;padding:14px;" onclick="chooseCalMethod(2)">
+        <strong style="display:block;font-size:13px;color:var(--text);margin-bottom:2px;">2 · Place an A4 sheet on the footpath</strong>
+        <span style="font-size:11px;color:var(--muted);">No measuring — just tap the sheet's edges in the photo</span>
+      </button>
+    </div>
+
+    <div id="cal-method1-panel" style="display:none;">
+      <div class="cal-steps" style="margin-top:10px;">
+        <div class="cal-step"><div class="step-num">1</div>Position the Building edge and Kerb edge lines exactly on the width you measured</div>
+        <div class="cal-step"><div class="step-num">2</div>Enter that width below and tap Apply Calibration</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Known Reference Width (mm)</label>
+        <input class="form-input" id="cal-ref-input" type="number" placeholder="e.g. 600">
+        <span class="form-hint">Leave blank to update camera height only</span>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="chooseCalMethod(0)">Back</button>
+        <button class="btn-primary" style="flex:1;" onclick="doCalibrate()">Apply Calibration</button>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeCalModal()">Close</button>
+      <button class="btn-secondary btn-danger" style="flex:1;" onclick="resetCal()">Reset to Default</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeCalModal();openGuideModal();" style="width:100%;">📋 Field Guide</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ A4 CALIBRATION INSTRUCTIONS MODAL ═══════════ -->
+<div class="modal-overlay" id="a4-instructions-modal" style="display:none;" onclick="closeModal('a4-instructions-modal',event)">
+  <div class="modal-sheet" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Calibrate with A4 Paper</div>
+    <div class="modal-sub">Quick setup — no tape measure or height estimate needed.</div>
+
+    <div style="background:var(--surface);border-radius:var(--r);padding:14px;border:1px solid var(--border);margin-bottom:16px;">
+      <svg viewBox="0 0 300 200" width="100%" style="max-width:260px;display:block;margin:0 auto;">
+        <polygon points="20,190 280,190 175,68 125,68" fill="#101a2c" stroke="#253449" stroke-width="1"/>
+        <line x1="20" y1="190" x2="125" y2="68" stroke="#f59e0b" stroke-width="3" stroke-linecap="round"/>
+        <line x1="280" y1="190" x2="175" y2="68" stroke="#2dd4bf" stroke-width="3" stroke-linecap="round"/>
+        <rect x="93" y="100" width="114" height="74" rx="2" fill="none" stroke="#e879f9" stroke-width="2.5"/>
+        <circle cx="101" cy="108" r="4" fill="#e879f9"/>
+        <text x="101" y="125" font-size="10" font-weight="600" fill="#e879f9" text-anchor="middle">1</text>
+        <circle cx="207" cy="108" r="4" fill="#e879f9"/>
+        <text x="207" y="125" font-size="10" font-weight="600" fill="#e879f9" text-anchor="middle">2</text>
+        <circle cx="101" cy="167" r="4" fill="#e879f9"/>
+        <text x="101" y="180" font-size="10" font-weight="600" fill="#e879f9" text-anchor="middle">3</text>
+        <circle cx="207" cy="167" r="4" fill="#e879f9"/>
+        <text x="207" y="180" font-size="10" font-weight="600" fill="#e879f9" text-anchor="middle">4</text>
+        <text x="154" y="141" font-size="11" font-weight="700" fill="#f0f4f8" text-anchor="middle">A4</text>
+        <rect x="131" y="150" width="38" height="62" rx="7" fill="#162032" stroke="#f0f4f8" stroke-width="2"/>
+        <rect x="139" y="157" width="22" height="43" rx="2" fill="#060d1a"/>
+        <circle cx="150" cy="204" r="2.5" fill="#6b84a0"/>
+      </svg>
+    </div>
 
     <div class="cal-steps">
-      <div class="cal-step"><div class="step-num">1</div>Load a photo where you know a real-world width (e.g. a 600mm floor tile)</div>
-      <div class="cal-step"><div class="step-num">2</div>Position the Building edge and Kerb edge lines exactly on that reference</div>
-      <div class="cal-step"><div class="step-num">3</div>Enter the actual width below and tap Calibrate</div>
-    </div>
-
-    <div class="form-group">
-      <label class="form-label">Known Reference Width (mm)</label>
-      <input class="form-input" id="cal-ref-input" type="number" placeholder="e.g. 600">
-      <span class="form-hint">Leave blank to update camera height only</span>
+      <div class="cal-step"><div class="step-num">1</div>Turn your phone to <strong style="color:var(--text);">portrait</strong> orientation — the app's perspective math assumes a portrait photo.</div>
+      <div class="cal-step"><div class="step-num">2</div>Lay a sheet of A4 paper flat on the ground, <strong style="color:var(--text);">across the footpath</strong> (perpendicular to the direction you're walking), roughly in the lower-middle of the frame.</div>
+      <div class="cal-step"><div class="step-num">3</div>Take the photo with all four corners of the sheet clearly visible, then tap "Start Marking".</div>
+      <div class="cal-step"><div class="step-num">4</div>Tap the four corners of the A4 sheet: top-left, top-right, bottom-left, bottom-right. The app solves for your camera height automatically — no height guess needed.</div>
     </div>
 
     <div class="modal-actions">
-      <button class="btn-secondary" onclick="closeCalModal()">Cancel</button>
-      <button class="btn-primary" style="flex:1;" onclick="doCalibrate()">Apply Calibration</button>
-    </div>
-    <div class="modal-actions">
-      <button class="btn-secondary btn-danger" onclick="resetCal()">Reset to Default</button>
-      <button class="btn-secondary" onclick="closeCalModal();openGuideModal();" style="flex:1;">📋 Field Guide</button>
+      <button class="btn-secondary" onclick="closeModal('a4-instructions-modal');openCalModal();">Back</button>
+      <button class="btn-primary" style="flex:1;" onclick="closeModal('a4-instructions-modal');startA4Mode();">Start Marking →</button>
     </div>
   </div>
 </div>
@@ -803,7 +867,7 @@ td.hi{color:white;font-weight:700;}
 
       <div style="background:var(--surface);border-radius:var(--r);padding:14px;border:1px solid var(--border);">
         <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Step 1 — Find a reference</div>
-        <div style="font-size:13px;color:var(--muted);line-height:1.6;">Pick something with a <strong style="color:var(--text);">known real-world width</strong> at the base of your photo frame — a standard floor tile (300 mm or 600 mm), a road marking, or a kerb section you've measured with tape.</div>
+        <div style="font-size:13px;color:var(--muted);line-height:1.6;"><strong style="color:var(--success);">Recommended: Method 2 (A4 Paper)</strong> — No tape measure or height estimate needed. Lay a sheet of <strong style="color:var(--text);">A4 paper</strong> flat on the ground and tap its four corners. The app solves for your camera height automatically.<br><br>Or use <strong style="color:var(--text);">Method 1</strong> if you have a tape measure: pick something with a known width (floor tile, road marking, kerb section you've measured).</div>
       </div>
 
       <div style="background:var(--surface);border-radius:var(--r);padding:14px;border:1px solid var(--border);">
@@ -813,12 +877,12 @@ td.hi{color:white;font-weight:700;}
 
       <div style="background:var(--surface);border-radius:var(--r);padding:14px;border:1px solid var(--border);">
         <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Step 3 — Calibrate</div>
-        <div style="font-size:13px;color:var(--muted);line-height:1.6;">Tap the <strong style="color:var(--text);">Scale badge</strong> → enter the actual width of your reference → tap <strong style="color:var(--text);">Apply Calibration</strong>. The scale factor updates and is saved for your phone model.</div>
+        <div style="font-size:13px;color:var(--muted);line-height:1.6;"><strong style="color:var(--success);">Method 2 (A4):</strong> Tap the <strong style="color:var(--text);">Scale badge</strong> → select "Place an A4 sheet on the footpath" → tap "Start Marking" → tap all four corners of the A4 sheet. Done! Camera height solved automatically.<br><br><strong style="color:var(--text);">Method 1 (Tape):</strong> Position lines exactly on your measured width → enter that width in the calibration modal → tap <strong style="color:var(--text);">Apply Calibration</strong>.</div>
       </div>
 
       <div style="background:var(--surface);border-radius:var(--r);padding:14px;border:1px solid var(--border);">
         <div style="font-size:11px;font-weight:700;color:var(--success);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Expected accuracy</div>
-        <div style="font-size:13px;color:var(--muted);line-height:1.6;">After one calibration, expect <strong style="color:var(--text);">±5–15%</strong> accuracy on level footpaths in good light. Accuracy improves when the footpath fills the lower half of the frame and lines are locked at the bottom edge.</div>
+        <div style="font-size:13px;color:var(--muted);line-height:1.6;"><strong style="color:var(--text);">Method 2 (A4 paper):</strong> ±3–8% — solves for camera height automatically using both dimensions.<br><strong style="color:var(--text);">Method 1 (Tape):</strong> ±5–15% — depends on accurate height estimate.<br><br>Accuracy improves when the footpath fills the lower half of the frame and lines are locked at the bottom edge.</div>
       </div>
 
       <div style="background:rgba(245,158,11,0.08);border-radius:var(--r);padding:14px;border:1px solid rgba(245,158,11,0.25);">
@@ -870,6 +934,8 @@ var S = {
   pActive:false, pBx:0, pZY:0, pLocked:false, pLockedExit:null, pLockedBx:null, pLockedZY:null,
   eyeH:1200, scaleFactor:1.0, focal:0,
   drag:null, _lp:{x:0,y:0}, startP:{x:0,y:0}, moved:false,
+  // A4-sheet calibration mode (Method 2) — two tapped points on the sheet's edges
+  aMode:false, aPts:[],
   recs:[], imgLoaded:false,
   rawImgB64:null, imgMimeType:'image/jpeg',
   selMats:new Set(),
@@ -877,23 +943,235 @@ var S = {
 };
 
 // ─── LOGIN ─────────────────────────────────────────────────────────────────────
-function modelChanged() {
-  var sel = document.getElementById('l-model').value;
-  document.getElementById('l-model-custom').style.display = sel==='custom' ? 'block' : 'none';
+
+// ─── PHONE MODEL AUTOCOMPLETE ──────────────────────────────────────────────────
+// Seed list: common phone models sold in India, grouped loosely by brand.
+// Not exhaustive by design — anything a surveyor actually types gets added
+// to fp_custom_models permanently (see saveCustomModel), so the effective
+// list grows to match real field devices over time instead of us trying to
+// hand-maintain an exhaustive catalog upfront.
+var SEED_MODELS = [
+  // Apple — back to iPhone 6 (~2014)
+  'iPhone 6','iPhone 6 Plus','iPhone 6s','iPhone 6s Plus',
+  'iPhone SE (2016)','iPhone 7','iPhone 7 Plus','iPhone 8','iPhone 8 Plus',
+  'iPhone X','iPhone XR','iPhone XS','iPhone XS Max',
+  'iPhone SE (2020)','iPhone SE (2022)',
+  'iPhone 11','iPhone 11 Pro','iPhone 11 Pro Max',
+  'iPhone 12','iPhone 12 Mini','iPhone 12 Pro','iPhone 12 Pro Max',
+  'iPhone 13','iPhone 13 Mini','iPhone 13 Pro','iPhone 13 Pro Max',
+  'iPhone 14','iPhone 14 Plus','iPhone 14 Pro','iPhone 14 Pro Max',
+  'iPhone 15','iPhone 15 Plus','iPhone 15 Pro','iPhone 15 Pro Max',
+  'iPhone 16','iPhone 16 Plus','iPhone 16 Pro','iPhone 16 Pro Max','iPhone 16e',
+  'iPhone 17','iPhone 17 Pro','iPhone 17 Pro Max','iPhone 17 Air',
+  // Samsung Galaxy S — back to S6 (2015)
+  'Samsung Galaxy S6','Samsung Galaxy S6 Edge','Samsung Galaxy S7','Samsung Galaxy S7 Edge',
+  'Samsung Galaxy S8','Samsung Galaxy S8+','Samsung Galaxy S9','Samsung Galaxy S9+',
+  'Samsung Galaxy S10e','Samsung Galaxy S10','Samsung Galaxy S10+','Samsung Galaxy S10 Lite',
+  'Samsung Galaxy S20','Samsung Galaxy S20+','Samsung Galaxy S20 Ultra','Samsung Galaxy S20 FE',
+  'Samsung Galaxy S21','Samsung Galaxy S21+','Samsung Galaxy S21 Ultra','Samsung Galaxy S21 FE',
+  'Samsung Galaxy S22','Samsung Galaxy S22+','Samsung Galaxy S22 Ultra',
+  'Samsung Galaxy S23','Samsung Galaxy S23+','Samsung Galaxy S23 Ultra','Samsung Galaxy S23 FE',
+  'Samsung Galaxy S24','Samsung Galaxy S24+','Samsung Galaxy S24 Ultra','Samsung Galaxy S24 FE',
+  'Samsung Galaxy S25','Samsung Galaxy S25+','Samsung Galaxy S25 Ultra','Samsung Galaxy S25 Edge',
+  // Samsung Galaxy Note (discontinued line, still common in the field)
+  'Samsung Galaxy Note 4','Samsung Galaxy Note 5','Samsung Galaxy Note 8',
+  'Samsung Galaxy Note 9','Samsung Galaxy Note 10','Samsung Galaxy Note 10+',
+  'Samsung Galaxy Note 20','Samsung Galaxy Note 20 Ultra',
+  // Samsung foldables
+  'Samsung Galaxy Fold','Samsung Galaxy Z Fold2','Samsung Galaxy Z Fold3','Samsung Galaxy Z Fold4',
+  'Samsung Galaxy Z Fold5','Samsung Galaxy Z Fold6',
+  'Samsung Galaxy Z Flip','Samsung Galaxy Z Flip3','Samsung Galaxy Z Flip4',
+  'Samsung Galaxy Z Flip5','Samsung Galaxy Z Flip6',
+  // Samsung Galaxy A/J/M/F — budget/midrange, common older field devices
+  'Samsung Galaxy J2','Samsung Galaxy J5','Samsung Galaxy J7','Samsung Galaxy J7 Prime',
+  'Samsung Galaxy A5 (2017)','Samsung Galaxy A7 (2018)',
+  'Samsung Galaxy A10','Samsung Galaxy A20','Samsung Galaxy A30','Samsung Galaxy A50','Samsung Galaxy A70',
+  'Samsung Galaxy A21s','Samsung Galaxy A31','Samsung Galaxy A51','Samsung Galaxy A71',
+  'Samsung Galaxy A12','Samsung Galaxy A22','Samsung Galaxy A32','Samsung Galaxy A52','Samsung Galaxy A72',
+  'Samsung Galaxy A13','Samsung Galaxy A23','Samsung Galaxy A33','Samsung Galaxy A53','Samsung Galaxy A73',
+  'Samsung Galaxy A14','Samsung Galaxy A24','Samsung Galaxy A15','Samsung Galaxy A16',
+  'Samsung Galaxy A25','Samsung Galaxy A26','Samsung Galaxy A34','Samsung Galaxy A35',
+  'Samsung Galaxy A54','Samsung Galaxy A55','Samsung Galaxy A56',
+  'Samsung Galaxy M10','Samsung Galaxy M20','Samsung Galaxy M30','Samsung Galaxy M31','Samsung Galaxy M51',
+  'Samsung Galaxy M15','Samsung Galaxy M16','Samsung Galaxy M34','Samsung Galaxy M35',
+  'Samsung Galaxy F14','Samsung Galaxy F15',
+  // Google (Nexus + Pixel, back to ~2015)
+  'Nexus 5X','Nexus 6P','Pixel','Pixel XL','Pixel 2','Pixel 2 XL','Pixel 3','Pixel 3 XL',
+  'Pixel 3a','Pixel 3a XL','Pixel 4','Pixel 4 XL','Pixel 4a','Pixel 5','Pixel 5a',
+  'Pixel 6','Pixel 6 Pro','Pixel 6a',
+  'Pixel 7','Pixel 7 Pro','Pixel 7a','Pixel 8','Pixel 8 Pro','Pixel 8a',
+  'Pixel 9','Pixel 9 Pro','Pixel 9 Pro XL','Pixel 9a',
+  // OnePlus — back to the original 2014 One
+  'OnePlus One','OnePlus 2','OnePlus X','OnePlus 3','OnePlus 3T','OnePlus 5','OnePlus 5T',
+  'OnePlus 6','OnePlus 6T','OnePlus 7','OnePlus 7 Pro','OnePlus 7T','OnePlus 7T Pro',
+  'OnePlus 8','OnePlus 8 Pro','OnePlus 8T','OnePlus 9','OnePlus 9 Pro','OnePlus 9R',
+  'OnePlus 10R','OnePlus 10 Pro','OnePlus 11','OnePlus 11R','OnePlus 12','OnePlus 12R',
+  'OnePlus 13','OnePlus 13R',
+  'OnePlus Nord','OnePlus Nord 2','OnePlus Nord 3','OnePlus Nord 4',
+  'OnePlus Nord CE','OnePlus Nord CE 2','OnePlus Nord CE3 Lite','OnePlus Nord CE4',
+  // Xiaomi / Redmi / Poco — back to the original Redmi 1S / Mi 3 era
+  'Mi 3','Mi 4','Redmi 1S','Redmi 2','Redmi Note 3','Redmi Note 4','Redmi Note 5',
+  'Redmi Note 5 Pro','Redmi Note 6 Pro','Redmi Note 7','Redmi Note 7 Pro','Redmi Note 7S',
+  'Redmi Note 8','Redmi Note 8 Pro','Redmi Note 9','Redmi Note 9 Pro','Redmi Note 9 Pro Max',
+  'Redmi Note 10','Redmi Note 10 Pro','Redmi Note 10S','Redmi Note 11','Redmi Note 11 Pro',
+  'Redmi Note 12','Redmi Note 12 Pro','Redmi Note 13','Redmi Note 13 Pro','Redmi Note 13 Pro+',
+  'Redmi Note 14','Redmi Note 14 Pro',
+  'Redmi 4','Redmi 4A','Redmi 5','Redmi 5A','Redmi 6','Redmi 6A','Redmi 7','Redmi 7A',
+  'Redmi 8','Redmi 8A','Redmi 9','Redmi 9A','Redmi 9 Power','Redmi 10','Redmi 10A',
+  'Redmi 11 Prime','Redmi 12','Redmi 13','Redmi A1','Redmi A2','Redmi A3',
+  'Mi A1','Mi A2','Mi A3','Mi 5','Mi 6','Redmi Y1','Redmi Y2',
+  'Xiaomi Mi 9','Xiaomi Mi 10','Xiaomi Mi 11','Xiaomi 11 Lite','Xiaomi 12','Xiaomi 12 Pro',
+  'Xiaomi 13','Xiaomi 13 Pro','Xiaomi 14','Xiaomi 14 Pro','Xiaomi 14 Civi',
+  'Poco F1','Poco X2','Poco X3','Poco X3 Pro','Poco M2','Poco M3','Poco C3',
+  'Poco C65','Poco M6 Pro','Poco X5','Poco X5 Pro','Poco X6','Poco X6 Pro','Poco X7','Poco X7 Pro',
+  'Poco F5','Poco F6','Poco F6 Pro',
+  // Realme — spun off from Oppo in 2018
+  'Realme 1','Realme 2','Realme 2 Pro','Realme 3','Realme 3 Pro','Realme 5','Realme 5 Pro',
+  'Realme 5s','Realme 6','Realme 6 Pro','Realme 7','Realme 7 Pro','Realme 8','Realme 8 Pro',
+  'Realme 9','Realme 9 Pro','Realme 9 Pro+','Realme 10','Realme 10 Pro',
+  'Realme C1','Realme C2','Realme C11','Realme C12','Realme C21','Realme C25','Realme C30','Realme C33',
+  'Realme Narzo 10','Realme Narzo 20','Realme Narzo 30','Realme Narzo 50','Realme Narzo 60','Realme Narzo 70',
+  'Realme 11 Pro','Realme 11 Pro+','Realme 12 Pro','Realme 12 Pro+',
+  'Realme 13 Pro','Realme 13 Pro+','Realme GT 5','Realme GT 6',
+  // Vivo / iQOO — back to ~2016
+  'Vivo Y21','Vivo Y31','Vivo Y51','Vivo Y53','Vivo Y69','Vivo Y71','Vivo Y81','Vivo Y91',
+  'Vivo Y12','Vivo Y15','Vivo Y17','Vivo Y20','Vivo Y30','Vivo Y50',
+  'Vivo V5','Vivo V7','Vivo V9','Vivo V11','Vivo V15','Vivo V17','Vivo V19','Vivo V20',
+  'Vivo V21','Vivo V23','Vivo V25','Vivo V27','Vivo V29','Vivo V30','Vivo V30e','Vivo V40',
+  'Vivo Y100','Vivo Y200','Vivo X60','Vivo X70','Vivo X80','Vivo X90','Vivo X100','Vivo X200',
+  'iQOO 3','iQOO 7','iQOO 9','iQOO 11','iQOO 12','iQOO Z1','iQOO Z3','iQOO Z5','iQOO Z6',
+  'iQOO Z7','iQOO Z9','iQOO Neo 6','iQOO Neo 7','iQOO Neo 9','iQOO Neo 9 Pro',
+  // Oppo — back to ~2016
+  'Oppo A37','Oppo A57','Oppo A71','Oppo A83','Oppo F1','Oppo F1s','Oppo F3','Oppo F5',
+  'Oppo F7','Oppo F9','Oppo F11','Oppo F11 Pro','Oppo F15','Oppo F17','Oppo F19','Oppo F21',
+  'Oppo A5','Oppo A5s','Oppo A7','Oppo A9','Oppo A11k','Oppo A12','Oppo A15','Oppo A31',
+  'Oppo A52','Oppo A53','Oppo A54','Oppo A55','Oppo A56','Oppo A57','Oppo A74','Oppo A76',
+  'Oppo A77','Oppo A78','Oppo A79','Oppo Reno','Oppo Reno 2','Oppo Reno 3','Oppo Reno 4',
+  'Oppo Reno 5','Oppo Reno 6','Oppo Reno 7','Oppo Reno 8','Oppo Reno 10','Oppo Reno 11',
+  'Oppo Reno 12','Oppo Find X','Oppo Find X2','Oppo Find X3','Oppo Find X5','Oppo Find X7',
+  // Motorola — back to ~2015 (Moto G3/E2, Moto X)
+  'Moto G (3rd Gen)','Moto E2','Moto X Style','Moto G4','Moto G4 Plus','Moto G5','Moto G5 Plus',
+  'Moto G5s','Moto G6','Moto G6 Plus','Moto G7','Moto G7 Power','Moto G8','Moto G8 Power',
+  'Moto G9','Moto G9 Power','Moto G10','Moto G20','Moto G30','Moto G40','Moto G50','Moto G60',
+  'Moto G54','Moto G64','Moto G84','Moto Edge 20','Moto Edge 30','Moto Edge 40',
+  'Moto Edge 50','Moto Edge 50 Pro','Moto Edge 50 Fusion','Moto E4','Moto E5','Moto E6','Moto E7',
+  // Nothing / Infinix / Tecno
+  'Nothing Phone (1)','Nothing Phone (2)','Nothing Phone (2a)',
+  'Infinix Hot 8','Infinix Hot 9','Infinix Hot 10','Infinix Hot 40',
+  'Infinix Note 8','Infinix Note 10','Infinix Note 40','Infinix Zero 8','Infinix Zero 40',
+  'Tecno Spark 5','Tecno Spark 8','Tecno Spark 20','Tecno Camon 12','Tecno Camon 30','Tecno Pova 6',
+  // Older Indian-market budget brands (still common in field surveys)
+  'Micromax Canvas','Micromax Bolt','Micromax Yu Yureka','Lava Iris','Lava Z61','Karbonn Titanium',
+  'Nokia 6.1','Nokia 5.1 Plus','Nokia 6.2','Nokia G21','Nokia G42','Asus Zenfone Max','Asus Zenfone 5'
+];
+
+function normalizeModel(s) {
+  return (s||'').trim().replace(/\s+/g,' ').toLowerCase();
+}
+
+// Every known model (seed + anything surveyors have typed before), deduped.
+function allKnownModels() {
+  var custom = JSON.parse(localStorage.getItem('fp_custom_models') || '[]');
+  var seen = {}, out = [];
+  SEED_MODELS.concat(custom).forEach(function(m){
+    var k = normalizeModel(m);
+    if (!k || seen[k]) return;
+    seen[k] = true; out.push(m);
+  });
+  return out;
+}
+
+// If `name` matches an existing model (case/whitespace-insensitive), return
+// that exact existing string so we always reuse one canonical spelling
+// instead of saving near-duplicates like "redmi note 5" vs "Redmi Note 5".
+function canonicalizeModel(name) {
+  var key = normalizeModel(name);
+  var match = allKnownModels().find(function(m){ return normalizeModel(m) === key; });
+  return match || name.trim().replace(/\s+/g,' ');
+}
+
+// Persists a genuinely new model to fp_custom_models. Returns the canonical
+// string to actually use (existing match if one was found, otherwise the
+// cleaned-up new value) — callers should use the return value, not `name`.
+function saveCustomModel(name) {
+  if (!name) return name;
+  var canon = canonicalizeModel(name);
+  var key = normalizeModel(canon);
+  var custom = JSON.parse(localStorage.getItem('fp_custom_models') || '[]');
+  var alreadyKnown = SEED_MODELS.concat(custom).some(function(m){ return normalizeModel(m) === key; });
+  if (!alreadyKnown) {
+    custom.push(canon);
+    localStorage.setItem('fp_custom_models', JSON.stringify(custom));
+  }
+  return canon;
+}
+
+function preselectLastModel() {
+  var last = localStorage.getItem('fp_last_model');
+  if (last) document.getElementById('l-model').value = last;
+}
+
+// Fuzzy-ish match: every whitespace-separated token the user typed must
+// appear as a substring somewhere in the candidate (in any order), so
+// "note 13 pro" matches "Redmi Note 13 Pro" without needing exact prefix order.
+function matchesQuery(candidate, query) {
+  var c = normalizeModel(candidate);
+  var tokens = normalizeModel(query).split(' ').filter(Boolean);
+  return tokens.every(function(t){ return c.indexOf(t) !== -1; });
+}
+
+function onModelInput() {
+  var input = document.getElementById('l-model');
+  var box   = document.getElementById('l-model-suggestions');
+  var q = input.value.trim();
+  var pool = allKnownModels();
+  var matches = q
+    ? pool.filter(function(m){ return matchesQuery(m, q); }).slice(0, 8)
+    : pool.slice(0, 8);
+  if (!matches.length) { box.style.display='none'; box.innerHTML=''; return; }
+  box.innerHTML = matches.map(function(m){
+    return '<div onmousedown="event.preventDefault();selectModel(\''
+      + m.replace(/'/g,"\\'") + '\')" style="padding:9px 12px;cursor:pointer;font-size:14px;'
+      + 'border-bottom:1px solid rgba(255,255,255,0.06);">' + m + '</div>';
+  }).join('');
+  box.style.display = 'block';
+}
+function selectModel(m) {
+  document.getElementById('l-model').value = m;
+  hideModelSuggestions();
+}
+function hideModelSuggestions() {
+  document.getElementById('l-model-suggestions').style.display = 'none';
 }
 
 function doLogin() {
-  var name  = document.getElementById('l-name').value.trim();
-  var phone = document.getElementById('l-phone').value.trim();
-  var model = document.getElementById('l-model').value;
-  if (model === 'custom') model = document.getElementById('l-model-custom').value.trim();
+  var name     = document.getElementById('l-name').value.trim();
+  var email    = document.getElementById('l-email').value.trim();
+  var phone    = document.getElementById('l-phone').value.trim();
+  var model    = document.getElementById('l-model').value.trim();
+  var heightCM = parseFloat(document.getElementById('l-height').value);
 
+  if (!name)                              { showToast('Enter your name','error'); return; }
+  if (!email || email.indexOf('@') < 0)   { showToast('Enter a valid email','error'); return; }
+  if (!phone)                             { showToast('Enter phone number','error'); return; }
+  if (!model)                             { showToast('Enter phone model','error'); return; }
+  if (!heightCM || heightCM < 100 || heightCM > 230) {
+    showToast('Enter your height in cm, e.g. 170','error'); return;
+  }
 
-  if (!name)  { showToast('Enter your name','error'); return; }
-  if (!phone) { showToast('Enter phone number','error'); return; }
-  if (!model) { showToast('Select phone model','error'); return; }
+  email = email.toLowerCase();
+  model = saveCustomModel(model);
+  localStorage.setItem('fp_last_model', model);
+  localStorage.setItem('fp_last_email', email);
 
-  U = { name, phone, model, eyeH: 1200 };
+  // Camera height starts as an estimate from the person's own height — see
+  // CAMERA_HEIGHT_RATIO below. Height + phone model are the two calibration
+  // identity keys now (email ties them to a person across sessions/devices);
+  // this estimate can still be refined live during a session (Method 1/2),
+  // but only scaleFactor is what actually gets shared back through the sheet.
+  var eyeH = Math.round(heightCM * 10 * CAMERA_HEIGHT_RATIO);
+
+  U = { name, email, phone, model, heightCM, eyeH };
   localStorage.setItem('fp_user', JSON.stringify(U));
   startMain();
 }
@@ -908,14 +1186,18 @@ function startMain() {
   showPage('pg-main');
   document.getElementById('hdr-user-name').textContent = U.name;
 
-  // Load calibration for this phone model
-  var cal = JSON.parse(localStorage.getItem('fp_cal_' + U.model) || '{}');
-  S.eyeH        = cal.eyeH        || U.eyeH || 1200;
+  // Eye height always comes from this person's height (see doLogin) — it's
+  // never looked up or shared, since how high someone holds a phone is a
+  // personal habit, not a phone property. Only scaleFactor is looked up
+  // below, keyed on email+model together.
+  S.eyeH = U.eyeH || 1200;
+
+  var cal = JSON.parse(localStorage.getItem(calKey()) || '{}');
   S.scaleFactor = cal.scaleFactor || 1.0;
   updateCalBadge();
 
   // Show first-use calibration nudge
-  var isFirstUse = !localStorage.getItem("fp_cal_" + U.model);
+  var isFirstUse = !localStorage.getItem(calKey());
   var nudge = document.getElementById("cal-nudge");
   nudge.style.display = isFirstUse ? "block" : "none";
   if (isFirstUse) document.getElementById("nudge-model").textContent = U.model;
@@ -924,8 +1206,40 @@ function startMain() {
   document.getElementById('setup-banner').style.display =
     (!APPS_SCRIPT_URL) ? 'block' : 'none';
 
+  // Pull the shared scaleFactor for this (email, phone model) pair from the
+  // Calibrations sheet — one row per person+phone, kept unique by an upsert
+  // on the Apps Script side. Lets the same person resume on a second device
+  // without recalibrating, without mixing their scaleFactor into anyone else's.
+  syncCalibrationFromServer();
+
   // Geolocation
   refreshGeo();
+}
+
+// Calibration identity key: email + phone model together. Height and model
+// are the two things that determine how someone's shots are scaled, and
+// email is what ties a person's height to their phone across sessions.
+function calKey() {
+  return 'fp_cal_' + (U.email || '').trim().toLowerCase() + '|' + (U.model || '').trim().toLowerCase();
+}
+
+// Best-effort fetch of the shared scaleFactor for this (email, model) pair.
+// Silent no-op on failure, missing URL, or no row yet for this person+phone.
+function syncCalibrationFromServer() {
+  if (!APPS_SCRIPT_URL) return;
+  postToScript({ action: 'getCalibration', email: U.email, model: U.model })
+    .then(function(res) {
+      if (!res || !res.calibration || !res.calibration.scaleFactor) return;
+
+      S.scaleFactor = res.calibration.scaleFactor;
+      localStorage.setItem(calKey(), JSON.stringify({ scaleFactor: S.scaleFactor }));
+
+      updateCalBadge();
+      if (S.imgLoaded) redraw();
+      document.getElementById('cal-nudge').style.display = 'none';
+      document.getElementById('btn-cal-hdr').classList.toggle('active', S.scaleFactor !== 1.0);
+    })
+    .catch(function(){});
 }
 
 function showPage(id) {
@@ -1047,6 +1361,22 @@ function widthMMRaw() {
 function widthMM() {
   return Math.round(widthMMRaw() * S.scaleFactor);
 }
+// Inverse of lineX: given an arbitrary tapped point (x,y), find the
+// "Bx" value (the x-intercept this same perspective ray would have at
+// the bottom of the frame) so it can be projected to any other row
+// with lineX() exactly like the building/kerb markers are.
+function bxFromXY(x, y) {
+  var d = y - S.vp.y;
+  return d ? S.vp.x + (x - S.vp.x) * (S.H - S.vp.y) / d : x;
+}
+// Raw (pre-scaleFactor) ground-plane distance between the two tapped
+// A4-sheet points, evaluated at their shared row — used by Method 2
+// calibration exactly the way widthMMRaw() is used by Method 1.
+function a4RawWidthAt(y) {
+  var x1 = lineX(bxFromXY(S.aPts[0].x, S.aPts[0].y), y);
+  var x2 = lineX(bxFromXY(S.aPts[1].x, S.aPts[1].y), y);
+  return Math.abs(toWorldMM(x1, y) - toWorldMM(x2, y));
+}
 function exitPoint(bx) {
   var sl = (bx - S.vp.x) / (S.H - S.vp.y);
   var tx = S.vp.x + sl*(S.H - S.vp.y), ty = S.H;
@@ -1104,12 +1434,22 @@ function applyZoom() {
   if (zg) zg.setAttribute('transform',
     'translate('+Z.tx.toFixed(1)+','+Z.ty.toFixed(1)+') scale('+Z.scale.toFixed(3)+')');
   var zr = document.getElementById('zoom-reset');
+  var isZ = Z.scale > 1.05;
   if (zr) {
-    var isZ = Z.scale > 1.05;
     zr.style.display = isZ ? 'block' : 'none';
     var zl = document.getElementById('zoom-label');
     if (zl && isZ) zl.textContent = Z.scale.toFixed(1)+'×';
   }
+  // At scale 1, hand vertical single-finger gestures back to the browser
+  // so the page scrolls normally when the finger starts over the photo.
+  // Once zoomed in, take full control so pan/pinch don't fight the page.
+  // Both the svg AND its wrapper (.vwrap) need this — an ancestor with
+  // touch-action:none overrides a descendant's more permissive value.
+  var ta = isZ ? 'none' : 'pan-y';
+  var svgEl = document.getElementById('svg');
+  if (svgEl) svgEl.style.touchAction = ta;
+  var vwrap = document.getElementById('vwrap');
+  if (vwrap) vwrap.style.touchAction = ta;
   // Re-render UI elements so counter-scale (isc) reflects new zoom level
   if (S.imgLoaded) redraw();
 }
@@ -1131,20 +1471,32 @@ function pMid(a,b) { return {x:(a.x+b.x)/2,y:(a.y+b.y)/2}; }
 // ─── POINTER EVENTS ────────────────────────────────────────────────────────────
 function onPD(e) {
   var raw = svgRaw(e);
+  var wasEmpty = Object.keys(_ptrs).length === 0;
   _ptrs[e.pointerId] = raw;
   var ids = Object.keys(_ptrs);
+  if (wasEmpty) S._multiTouch = false;
 
   if (ids.length >= 2) {
-    // Two fingers — start pinch, cancel any handle drag
+    // Two fingers — start pinch, cancel any handle drag or pending A4 tap
     S.drag = null;
+    S._multiTouch = true;
     var pa=_ptrs[ids[0]], pb=_ptrs[ids[1]];
     _pinch0 = { dist:pDist(pa,pb), mid:pMid(pa,pb), Z:{scale:Z.scale,tx:Z.tx,ty:Z.ty} };
     return;
   }
 
-  // Single finger — hit-test in content coords
   var p = toContent(raw);
   S.startP = {x:p.x,y:p.y}; S.moved = false; S._t = Date.now();
+
+  // A4 calibration mode — don't place the point yet. If a second finger
+  // lands right after (pinch-zoom to see the corner better), _multiTouch
+  // flips true above and onPU skips placement entirely. Only a genuine
+  // single-finger tap-and-release commits the point (see onPU).
+  if (S.aMode) {
+    S.drag = 'a4tap';
+    S._lp = p; S._rawLp = raw;
+    return;
+  }
   var wXz=lineX(S.wBx,S.wZY), kXm=lineX(S.kBx,S.kMY);
   var p0=exitPoint(S.wBx), p1=exitPoint(S.kBx);
   var hr = 1/Z.scale; // scale hit radius with zoom
@@ -1188,9 +1540,16 @@ function onPM(e) {
   var dx=p.x-S._lp.x, dy=p.y-S._lp.y;
   if (!S.moved && Math.hypot(p.x-S.startP.x,p.y-S.startP.y)>14) S.moved=true;
 
+  // ── A4 tap pending — just track movement, point commits on release ──
+  if (S.drag === 'a4tap') return;
+
+  // Prevent native scroll from winning the race against a genuine
+  // handle-drag/pan — called as soon as we know the touch landed on a
+  // draggable target, not gated behind the 14px "moved" threshold below.
+  e.preventDefault();
+
   // ── Pan when zoomed ──
   if (S.drag==='pan') {
-    e.preventDefault();
     Z.tx += raw.x - S._rawLp.x;
     Z.ty += raw.y - S._rawLp.y;
     clampZoom(); applyZoom();
@@ -1200,7 +1559,6 @@ function onPM(e) {
 
   // ── Handle drag ──
   if (S.moved) {
-    e.preventDefault();
     if (S.drag==='vp' && !S.vp.locked) {
       S.vp.x=Math.max(FENCE,Math.min(S.W-FENCE,p.x));
       S.vp.y=Math.max(FENCE,Math.min(S.H*0.6,p.y));
@@ -1225,8 +1583,19 @@ function onPM(e) {
 }
 
 function onPU(e) {
+  var wasA4Tap = S.drag === 'a4tap';
   delete _ptrs[e.pointerId];
   if (Object.keys(_ptrs).length < 2) _pinch0 = null;
+
+  if (wasA4Tap) {
+    // Only place the point for a genuine single-finger tap: no second
+    // finger ever joined this gesture, and the finger didn't wander (which
+    // would suggest a scroll/pinch attempt rather than a precise tap).
+    if (!S._multiTouch && !S.moved) placeA4Point(S.startP);
+    S.drag = null;
+    if (Object.keys(_ptrs).length===0) S.moved=false;
+    return;
+  }
 
   // Tap = any touch under 600ms (time-only, no movement penalty)
   var isTap = (Date.now() - S._t) < 600;
@@ -1456,6 +1825,33 @@ function redraw() {
     if (obadge2) obadge2.style.display = 'none';
   }
 
+  // ── A4 calibration points (Method 2) — sequential tapping 1→2→3→4 ──
+  if (S.aMode && S.aPts.length) {
+    if (S.aPts.length === 4) {
+      // All 4 points placed: draw filled rectangle with solid outline
+      var pts = S.aPts;
+      var polyPath = 'M '+pts[0].x.toFixed(1)+','+pts[0].y.toFixed(1)
+                   + ' L '+pts[1].x.toFixed(1)+','+pts[1].y.toFixed(1)
+                   + ' L '+pts[2].x.toFixed(1)+','+pts[2].y.toFixed(1)
+                   + ' L '+pts[3].x.toFixed(1)+','+pts[3].y.toFixed(1)
+                   + ' Z';
+      u+='<path d="'+polyPath+'" fill="#e879f9" fill-opacity="0.2" stroke="#e879f9" stroke-width="3" stroke-dasharray="none"/>';
+    } else {
+      // Draw connecting lines as user taps sequentially (dashed)
+      for (var i = 0; i < S.aPts.length - 1; i++) {
+        u+='<line x1="'+S.aPts[i].x.toFixed(1)+'" y1="'+S.aPts[i].y.toFixed(1)+'" x2="'+S.aPts[i+1].x.toFixed(1)+'" y2="'+S.aPts[i+1].y.toFixed(1)
+          +'" stroke="#e879f9" stroke-width="2.5" stroke-dasharray="4,3" opacity="0.8"/>';
+      }
+    }
+    // Draw numbered circles at each tap point
+    S.aPts.forEach(function(pt, idx){
+      u+='<g transform="translate('+pt.x.toFixed(1)+','+pt.y.toFixed(1)+') scale('+sc+')">'
+        +'<circle r="14" fill="#e879f9" stroke="white" stroke-width="2.5"/>'
+        +'<text x="0" y="5" font-size="14" font-weight="800" fill="#0c1220" text-anchor="middle">'+(idx+1)+'</text>'
+        +'</g>';
+    });
+  }
+
   document.getElementById('g-ui').innerHTML=u;
 }
 
@@ -1655,7 +2051,8 @@ async function submitRecord() {
     edgeType, calcOffsetMM, manualOffsetMM,
     lat:S.lat||'', lng:S.lng||'',
     time:now.toISOString(), surveyor:U.name,
-    phone:U.phone, model:U.model
+    phone:U.phone, model:U.model,
+    eyeH:S.eyeH, scaleFactor:S.scaleFactor
   };
 
   if (APPS_SCRIPT_URL) {
@@ -1745,6 +2142,24 @@ function compressImage(dataUrl, maxPx, quality) {
   });
 }
 
+// Best-effort log of a calibration event to the "Calibrations" sheet tab —
+// one row per (email, phone model) pair, kept unique by an upsert on the
+// Apps Script side. Eye height isn't sent: it's derived from height on every
+// login (see doLogin), so it's never the shared/looked-up value — only
+// scale_factor is. Never blocks the calibration UI flow — failures are silent.
+function logCalibrationToSheet(method) {
+  if (!APPS_SCRIPT_URL) return;
+  postToScript({
+    action: 'logCalibration',
+    row: {
+      surveyor: U.name, email: U.email, height: U.heightCM,
+      phone_model: U.model, phone_number: U.phone,
+      scale_factor: S.scaleFactor,
+      method: method, timestamp: new Date().toISOString()
+    }
+  }).catch(function(){});
+}
+
 // ─── APPS SCRIPT COMMUNICATION ────────────────────────────────────────────────
 // Must use text/plain — application/json triggers a CORS preflight that
 // Apps Script doesn't handle, so the POST would never reach doPost().
@@ -1800,12 +2215,14 @@ function resetForNext() {
 
 // ─── CALIBRATION ───────────────────────────────────────────────────────────────
 function openCalModal() {
-  var cal=JSON.parse(localStorage.getItem('fp_cal_'+U.model)||'{}');
+  var cal=JSON.parse(localStorage.getItem(calKey())||'{}');
   document.getElementById('cal-phone-lbl').textContent = U.model;
   document.getElementById('cal-scale-lbl').textContent = (cal.scaleFactor||1).toFixed(3)+'×';
-  document.getElementById('cal-eyeh-lbl').textContent  = (cal.eyeH||U.eyeH||1200)+' mm';
-  document.getElementById('cal-eyeh-input').value      = cal.eyeH||U.eyeH||1200;
+  document.getElementById('cal-eyeh-lbl').textContent  = (S.eyeH||U.eyeH||1200)+' mm';
+  document.getElementById('cal-eyeh-input').value      = S.eyeH||U.eyeH||1200;
+  document.getElementById('cal-height-input').value    = U.heightCM || '';
   document.getElementById('cal-ref-input').value       = '';
+  document.getElementById('cal-method1-panel').style.display = 'none';
   document.getElementById('cal-modal').style.display   = 'flex';
 }
 function closeCalModal(e) {
@@ -1813,10 +2230,8 @@ function closeCalModal(e) {
     document.getElementById('cal-modal').style.display='none';
 }
 function doCalibrate() {
-  var newEyeH = parseInt(document.getElementById('cal-eyeh-input').value)||1200;
+  var newEyeH = applyEyeHFromInput();
   var refMM   = parseFloat(document.getElementById('cal-ref-input').value);
-
-  S.eyeH = newEyeH;
 
   if(refMM){
     if(!S.imgLoaded){
@@ -1827,20 +2242,21 @@ function doCalibrate() {
     if(raw>0) S.scaleFactor=refMM/raw;
   }
 
-  var cal={eyeH:newEyeH,scaleFactor:S.scaleFactor};
-  localStorage.setItem('fp_cal_'+U.model,JSON.stringify(cal));
+  var cal={scaleFactor:S.scaleFactor};
+  localStorage.setItem(calKey(),JSON.stringify(cal));
   updateCalBadge();
   if(S.imgLoaded) redraw();
   closeCalModal();
   showToast('Calibration saved for '+U.model,'success');
   document.getElementById('cal-nudge').style.display='none';
   document.getElementById('btn-cal-hdr').classList.toggle('active', S.scaleFactor!==1.0);
+  logCalibrationToSheet(refMM ? 'Tape Measure' : 'Manual Height');
 }
 function resetCal() {
   if(!confirm('Reset calibration for '+U.model+'?')) return;
   S.scaleFactor=1.0;
   S.eyeH=U.eyeH||1200;
-  localStorage.removeItem('fp_cal_'+U.model);
+  localStorage.removeItem(calKey());
   updateCalBadge();
   if(S.imgLoaded) redraw();
   closeCalModal();
@@ -1851,6 +2267,198 @@ function updateCalBadge() {
   var el=document.getElementById('cal-badge');
   el.textContent='Scale: '+S.scaleFactor.toFixed(2)+'×';
   el.classList.toggle('calibrated', S.scaleFactor!==1.0);
+}
+
+// ─── CAMERA HEIGHT FROM PERSON'S HEIGHT ───────────────────────────────────────
+// Rough heuristic only: people shooting footpath photos typically hold the
+// phone around chest/elbow height, not full eye level, and this app's own
+// long-standing default (1200mm) implies roughly that ratio for an average
+// adult. This just gives a starting point — Method 1 or Method 2 calibration
+// still does the real correction afterward.
+var CAMERA_HEIGHT_RATIO = 0.70;
+function estimateEyeHFromHeight() {
+  var heightCM = parseFloat(document.getElementById('cal-height-input').value);
+  if (!heightCM || heightCM < 100 || heightCM > 230) {
+    showToast('Enter your height in cm, e.g. 170','error');
+    return;
+  }
+  var estMM = Math.round(heightCM * 10 * CAMERA_HEIGHT_RATIO);
+  document.getElementById('cal-eyeh-input').value = estMM;
+  U.heightCM = heightCM;
+  localStorage.setItem('fp_user', JSON.stringify(U));
+  showToast('Estimated ~' + estMM + 'mm — still fine-tune with a calibration below','info');
+}
+// Reads the Camera Height field and applies it to the live model — shared by
+// both doCalibrate() (Method 1) and confirmA4() (Method 2) so eyeH is always
+// in effect before either method computes its scaleFactor.
+function applyEyeHFromInput() {
+  var el = document.getElementById('cal-eyeh-input');
+  var v = parseInt(el && el.value) || S.eyeH || 1200;
+  S.eyeH = v;
+  return v;
+}
+// Toggles which calibration method's fields are shown. 0 = collapse back to
+// the chooser, 1 = reveal the known-width fields inline, 2 = hand off to the
+// A4 instructions modal (which itself leads into startA4Mode()).
+function chooseCalMethod(n) {
+  var panel1 = document.getElementById('cal-method1-panel');
+  if (n === 1) {
+    panel1.style.display = 'block';
+  } else if (n === 2) {
+    panel1.style.display = 'none';
+    applyEyeHFromInput();
+    closeCalModal();
+    document.getElementById('a4-instructions-modal').style.display = 'flex';
+  } else {
+    panel1.style.display = 'none';
+  }
+}
+
+
+// Alternative to typing in a known reference width (Method 1): place a real
+// A4 sheet flat on the ground in the photo, tap its four corners, and let the
+// sheet's standard 210×297mm dimensions calibrate both eyeH and scaleFactor
+// simultaneously. Eliminates the need to estimate camera height.
+function startA4Mode() {
+  if (!S.imgLoaded) { showToast('Load a photo first','error'); return; }
+  applyEyeHFromInput();
+  closeCalModal();
+  S.aMode = true;
+  S.aPts = [];
+  document.getElementById('a4-panel').style.display = 'block';
+  updateA4Panel();
+  redraw();
+}
+function cancelA4Mode() {
+  S.aMode = false;
+  S.aPts = [];
+  document.getElementById('a4-panel').style.display = 'none';
+  redraw();
+}
+function placeA4Point(p) {
+  if (S.aPts.length < 4) {
+    S.aPts.push({ x:p.x, y:p.y });
+  } else {
+    S.aPts = [{ x:p.x, y:p.y }]; // fifth tap restarts
+  }
+  updateA4Panel();
+  redraw();
+}
+function updateA4Panel() {
+  var txt = document.getElementById('a4-panel-text');
+  var choices = document.getElementById('a4-panel-choices');
+  if (!txt || !choices) return;
+  if (S.aPts.length === 0) {
+    txt.textContent = 'Tap the top-left corner of the A4 sheet.';
+    choices.style.display = 'none';
+  } else if (S.aPts.length === 1) {
+    txt.textContent = 'Tap the top-right corner.';
+    choices.style.display = 'none';
+  } else if (S.aPts.length === 2) {
+    txt.textContent = 'Tap the bottom-left corner.';
+    choices.style.display = 'none';
+  } else if (S.aPts.length === 3) {
+    txt.textContent = 'Tap the bottom-right corner.';
+    choices.style.display = 'none';
+  } else {
+    txt.textContent = 'All four corners marked — calibrating…';
+    choices.style.display = 'none';
+    // Auto-calibrate after a short delay
+    setTimeout(function() {
+      solveA4Calibration();
+    }, 300);
+  }
+}
+
+// Solve for both eyeH and scaleFactor using A4 measurements at two depths
+// Points: [top-left, top-right, bottom-left, bottom-right]
+// Sheet orientation: 297mm spans left-right (perpendicular to footpath)
+//                    210mm spans front-back (parallel to footpath, converges at VP)
+// By measuring 297mm at two different depths, we can solve for eyeH independently
+function solveA4Calibration() {
+  if (S.aPts.length < 4) return;
+
+  try {
+    var tl = S.aPts[0], tr = S.aPts[1], bl = S.aPts[2], br = S.aPts[3];
+
+    // Get screen pixel distances (before perspective transform)
+    var screen_dist_top = Math.abs(tr.x - tl.x);
+    var screen_dist_bot = Math.abs(br.x - bl.x);
+    var y_top = tl.y;
+    var y_bot = bl.y;
+
+    if (screen_dist_top <= 0 || screen_dist_bot <= 0) {
+      showToast('Could not calibrate — tap corners more precisely','error');
+      cancelA4Mode();
+      return;
+    }
+
+    // Solve for eyeH using perspective formula:
+    // world_distance = screen_distance * eyeH / depth
+    // 297mm = screen_dist * eyeH / (y - vp.y)
+    // eyeH = 297mm * (y - vp.y) / screen_dist
+    var depth_top = y_top - S.vp.y;
+    var depth_bot = y_bot - S.vp.y;
+
+    if (depth_top <= 0 || depth_bot <= 0) {
+      showToast('Invalid perspective — check VP position','error');
+      cancelA4Mode();
+      return;
+    }
+
+    // Two independent eyeH estimates from each measurement
+    var eyeH_from_top = 297 * depth_top / screen_dist_top;
+    var eyeH_from_bot = 297 * depth_bot / screen_dist_bot;
+
+    // Average the two estimates for robustness
+    S.eyeH = Math.round((eyeH_from_top + eyeH_from_bot) / 2);
+
+    // Now compute scale factors using the solved eyeH
+    var toWorldMM_with_eyeH = function(sx, sy) {
+      return sy <= S.vp.y ? 0 : (sx - S.vp.x) * (S.eyeH / (sy - S.vp.y));
+    };
+
+    var bx_tl = bxFromXY(tl.x, tl.y);
+    var bx_tr = bxFromXY(tr.x, tr.y);
+    var x_tl_top = lineX(bx_tl, y_top);
+    var x_tr_top = lineX(bx_tr, y_top);
+    var raw_h_top = Math.abs(toWorldMM_with_eyeH(x_tr_top, y_top) - toWorldMM_with_eyeH(x_tl_top, y_top));
+
+    var bx_bl = bxFromXY(bl.x, bl.y);
+    var bx_br = bxFromXY(br.x, br.y);
+    var x_bl_bot = lineX(bx_bl, y_bot);
+    var x_br_bot = lineX(bx_br, y_bot);
+    var raw_h_bot = Math.abs(toWorldMM_with_eyeH(x_br_bot, y_bot) - toWorldMM_with_eyeH(x_bl_bot, y_bot));
+
+    if (!(raw_h_top > 0) || !(raw_h_bot > 0)) {
+      showToast('Could not calibrate — measurements invalid','error');
+      cancelA4Mode();
+      return;
+    }
+
+    var sf_top = 297 / raw_h_top;
+    var sf_bot = 297 / raw_h_bot;
+    S.scaleFactor = (sf_top + sf_bot) / 2;
+
+    // Update the calibration modal's eyeH field so user sees the solved value
+    document.getElementById('cal-eyeh-input').value = S.eyeH;
+
+    var cal = { scaleFactor:S.scaleFactor };
+    localStorage.setItem(calKey(), JSON.stringify(cal));
+    updateCalBadge();
+    redraw();
+    cancelA4Mode();
+
+    var msg = 'Calibrated from A4 sheet ✓ (Solved camera height: ' + S.eyeH + 'mm)';
+    showToast(msg, 'success');
+    document.getElementById('cal-nudge').style.display = 'none';
+    document.getElementById('btn-cal-hdr').classList.toggle('active', S.scaleFactor !== 1.0);
+    logCalibrationToSheet('A4 Sheet');
+  } catch(err) {
+    console.error('A4 calibration error:', err);
+    showToast('Calibration failed: ' + err.message, 'error');
+    cancelA4Mode();
+  }
 }
 
 // ─── EXPORT CSV ────────────────────────────────────────────────────────────────
@@ -2105,6 +2713,7 @@ setInterval(function() {
 }, 45 * 60 * 1000);
 
 (function init(){
+  preselectLastModel();
   var saved=localStorage.getItem('fp_user');
   if(saved){
     try{
