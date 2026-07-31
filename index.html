@@ -390,10 +390,16 @@ td.hi{color:white;font-weight:700;}
           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
         </svg>
       </div>
-      <div class="icon-btn-sm" id="btn-cal-hdr" onclick="openCalModal()" title="Calibrate">
+      <div class="icon-btn-sm" id="btn-cal-hdr" onclick="switchTab('calibration')" title="Calibrate">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="3"/>
           <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+        </svg>
+      </div>
+      <div class="icon-btn-sm" id="btn-reset-hdr" onclick="resetCal()" title="Reset Calibration">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+          <path d="M3 3v5h5"/>
         </svg>
       </div>
       <div class="icon-btn-sm" onclick="doLogout()" title="Logout">
@@ -406,7 +412,7 @@ td.hi{color:white;font-weight:700;}
 
   <div id="setup-banner" class="setup-banner" style="display:none;">
     ⚙️ <strong>Apps Script not configured.</strong> Images and data will save locally only.
-    <a href="#" onclick="openCalModal();return false;">Configure →</a>
+    <a href="#" onclick="switchTab('calibration');return false;">Configure →</a>
   </div>
 
   <!-- Image canvas -->
@@ -426,8 +432,27 @@ td.hi{color:white;font-weight:700;}
         <circle cx="8.5" cy="8.5" r="1.5"/>
         <path d="M21 15l-5-5L5 21"/>
       </svg>
+      <!-- A4 pre-capture instructions — Method 2 only, before a photo exists -->
+      <div id="a4-precapture-hint" style="display:none;padding:0 20px 14px;">
+        <svg viewBox="0 0 300 200" width="100%" style="max-width:220px;display:block;margin:0 auto 10px;">
+          <polygon points="20,190 280,190 150,50" fill="#101a2c" stroke="#253449" stroke-width="1"/>
+          <polygon points="126.4,110 173.6,110 193.2,160 106.8,160"
+                   fill="#e879f9" fill-opacity="0.2" stroke="#e879f9" stroke-width="2.5"/>
+          <circle cx="126.4" cy="110" r="4" fill="#e879f9"/>
+          <text x="126.4" y="100" font-size="11" font-weight="700" fill="#e879f9" text-anchor="middle">1</text>
+          <circle cx="173.6" cy="110" r="4" fill="#e879f9"/>
+          <text x="173.6" y="100" font-size="11" font-weight="700" fill="#e879f9" text-anchor="middle">2</text>
+          <circle cx="106.8" cy="160" r="4" fill="#e879f9"/>
+          <text x="106.8" y="176" font-size="11" font-weight="700" fill="#e879f9" text-anchor="middle">3</text>
+          <circle cx="193.2" cy="160" r="4" fill="#e879f9"/>
+          <text x="193.2" y="176" font-size="11" font-weight="700" fill="#e879f9" text-anchor="middle">4</text>
+        </svg>
+        <div style="font-size:12px;color:var(--muted);text-align:center;line-height:1.5;">
+          Lay an A4 sheet flat on the footpath — landscape, shorter edge lined up along the footpath — then take the photo with all 4 corners visible.
+        </div>
+      </div>
       <div class="upload-btns">
-        <label class="upload-btn" for="fin-gal">
+        <label class="upload-btn" for="fin-gal" id="upload-btn-gallery">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="3" width="18" height="18" rx="2"/>
             <circle cx="8.5" cy="8.5" r="1.5"/>
@@ -498,6 +523,21 @@ td.hi{color:white;font-weight:700;}
     </div>
   </div>
 
+  <!-- Calibration tab: choose method -->
+  <div id="cal-choose-panel" style="display:none;margin:10px 18px 0;">
+    <button onclick="switchTab('measurement')" style="background:none;border:none;color:var(--muted);font-size:12px;padding:0 0 10px;cursor:pointer;font-family:inherit;">← Back to Measurement</button>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-secondary" style="flex:1;text-align:center;padding:16px 10px;" onclick="selectCalMethod('method1')">
+        <span style="display:block;width:24px;height:24px;line-height:24px;margin:0 auto 8px;border-radius:50%;background:var(--surface);border:1px solid var(--border);font-size:12px;font-weight:400;color:var(--muted);">1</span>
+        <span style="display:block;font-size:13px;font-weight:400;color:var(--text);">I know the footpath measurement</span>
+      </button>
+      <button class="btn-secondary" style="flex:1;text-align:center;padding:16px 10px;" onclick="selectCalMethod('method2')">
+        <span style="display:block;width:24px;height:24px;line-height:24px;margin:0 auto 8px;border-radius:50%;background:var(--surface);border:1px solid var(--border);font-size:12px;font-weight:400;color:var(--muted);">2</span>
+        <span style="display:block;font-size:13px;font-weight:400;color:var(--text);">Use reference object</span>
+      </button>
+    </div>
+  </div>
+
   <!-- A4-sheet calibration panel (Method 2) — shown only while marking.
        Sits below the photo (not overlaid on it) so it never hides the
        corners you're trying to tap. -->
@@ -505,21 +545,59 @@ td.hi{color:white;font-weight:700;}
     <div style="background:rgba(12,18,32,0.92);backdrop-filter:blur(8px);border:1px solid rgba(232,121,249,0.4);border-radius:12px;padding:12px 14px;">
       <div id="a4-panel-text" style="font-size:12px;color:#f0f4f8;margin-bottom:10px;line-height:1.4;">Tap the top-left corner of the A4 sheet.</div>
       <div id="a4-panel-choices" style="display:none;"></div>
-      <button onclick="cancelA4Mode()" id="a4-cancel-btn" style="width:100%;background:transparent;border:1px solid rgba(255,255,255,0.15);color:#94a3b8;border-radius:8px;padding:7px;font-size:11px;cursor:pointer;touch-action:manipulation;font-family:inherit;">Cancel</button>
+      <button onclick="backToChooseMethod()" id="a4-cancel-btn" style="width:100%;background:transparent;border:1px solid rgba(255,255,255,0.15);color:#94a3b8;border-radius:8px;padding:7px;font-size:11px;cursor:pointer;touch-action:manipulation;font-family:inherit;">Back</button>
     </div>
   </div>
+
+  <!-- Method 1 panel — width input + Confirm, shown once a photo is loaded
+       in Method-1 calibration mode. Position the Building/Kerb edge lines
+       on the photo to match a width you already know, then enter it here. -->
+  <div id="m1-cal-panel" style="display:none;margin:8px 18px 0;">
+    <div style="background:rgba(12,18,32,0.92);backdrop-filter:blur(8px);border:1px solid rgba(245,158,11,0.4);border-radius:12px;padding:14px;">
+      <div style="font-size:12px;color:#f0f4f8;margin-bottom:10px;line-height:1.4;">Position the Building edge and Kerb edge lines on the footpath width you know, then enter it below.</div>
+      <div class="form-group" style="margin-bottom:10px;">
+        <label class="form-label">Footpath Width (mm)</label>
+        <input class="form-input" id="cal-ref-input" type="number" placeholder="e.g. 1500">
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button onclick="backToChooseMethod()" style="flex:0 0 auto;background:transparent;border:1px solid rgba(255,255,255,0.15);color:#94a3b8;border-radius:8px;padding:0 16px;cursor:pointer;font-family:inherit;">Back</button>
+        <button class="btn-primary" style="flex:1;" onclick="doCalibrate()">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Shared result step for both methods — shown once calibration succeeds -->
+  <div id="cal-result-panel" style="display:none;margin:8px 18px 0;">
+    <div style="background:rgba(12,18,32,0.92);backdrop-filter:blur(8px);border:1px solid rgba(34,197,94,0.4);border-radius:12px;padding:14px;">
+      <div id="cal-result-text" style="font-size:13px;font-weight:700;color:#86efac;margin-bottom:10px;">Calibrated ✓</div>
+      <button onclick="finishCalScreen()" style="width:100%;background:#22c55e;border:none;color:#062012;border-radius:8px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Test Measurement →</button>
+    </div>
+  </div>
+
   <p class="hint" id="hint" style="display:none;">👆 tap a knob to lock it · drag to move</p>
 
-  <!-- First-use calibration nudge -->
-  <div id="cal-nudge" style="display:none;margin:8px 18px 0;">
-    <div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.25);border-radius:10px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;">
-      <span style="font-size:12px;color:#93b4d8;line-height:1.5;">📐 First time on <strong id="nudge-model" style="color:var(--text);">this phone</strong> — add a measurement to calibrate the grid scale.</span>
-      <button onclick="openCalModal()" style="background:var(--accent);color:white;border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit;flex-shrink:0;">Calibrate</button>
+  <!-- Unified calibration status — one box, two states -->
+  <div id="cal-status-box" style="margin:8px 18px 0;">
+    <div id="cal-status-empty" style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.25);border-radius:10px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+      <span style="font-size:12px;color:#93b4d8;line-height:1.5;">📐 No calibration yet — add one for accurate measurements.</span>
+      <button onclick="switchTab('calibration')" style="background:var(--accent);color:white;border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit;flex-shrink:0;">Add Calibration</button>
+    </div>
+    <div id="cal-status-set" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 14px;align-items:center;justify-content:space-between;gap:10px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <select id="cal-method-select" onchange="onCalMethodChange()"
+          style="background:transparent;border:1px solid var(--border);border-radius:8px;
+          color:var(--text);font-size:11px;padding:4px 6px;font-family:inherit;">
+          <option value="method2">Method 2</option>
+          <option value="method1">Method 1</option>
+        </select>
+        <span id="cal-badge" class="cal-badge" style="cursor:default;">Scale: 1.00×</span>
+      </div>
+      <button onclick="resetCal()" style="background:transparent;border:1px solid rgba(255,255,255,0.15);color:#94a3b8;border-radius:8px;padding:6px 12px;font-size:11px;cursor:pointer;font-family:inherit;">Reset</button>
     </div>
   </div>
 
   <!-- Measurement row -->
-  <div class="ftr">
+  <div class="ftr" id="ftr-section">
     <div class="ftr-r1">
       <span class="flbl">Footpath width (mm)</span>
       <div class="vpill"><span class="vval" id="w-val">—</span></div>
@@ -559,15 +637,6 @@ td.hi{color:white;font-weight:700;}
     <div style="margin-top:2px;padding:10px 0 0;border-top:1px solid var(--border);">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
         <span class="flbl">Focal point</span>
-        <div style="display:flex;align-items:center;gap:6px;">
-          <select id="cal-method-select" onchange="onCalMethodChange()"
-            style="background:var(--surface);border:1px solid var(--border);border-radius:8px;
-            color:var(--text);font-size:11px;padding:4px 6px;font-family:inherit;">
-            <option value="method2">Method 2 (A4)</option>
-            <option value="method1">Method 1 (Manual)</option>
-          </select>
-          <div class="cal-badge" id="cal-badge" onclick="openCalModal()">Scale: 1.00×</div>
-        </div>
       </div>
       <div class="ftr-r2">
         <div style="display:grid;grid-template-columns:repeat(3,36px);grid-template-rows:repeat(3,36px);gap:4px;">
@@ -596,7 +665,7 @@ td.hi{color:white;font-weight:700;}
   </div>
 
   <!-- Submit -->
-  <div class="submit-sec">
+  <div class="submit-sec" id="submit-sec">
     <button class="btn-submit" id="btn-submit" onclick="submitRecord()">SUBMIT</button>
     <div class="status-msg" id="status-msg"></div>
     <div id="img-download-sec" style="display:none;padding:6px 0 0;"></div>
@@ -618,70 +687,6 @@ td.hi{color:white;font-weight:700;}
 </div>
 
 <!-- ═══════════════════ CALIBRATION MODAL ═══════════════════ -->
-<div class="modal-overlay" id="cal-modal" style="display:none;" onclick="closeCalModal(event)">
-  <div class="modal-sheet" onclick="event.stopPropagation()">
-    <div class="modal-handle"></div>
-    <div class="modal-title">Calibrate</div>
-
-    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:6px;">
-      <button class="btn-secondary" style="width:100%;text-align:left;padding:16px;" onclick="chooseCalMethod(1)">
-        <strong style="display:block;font-size:14px;color:var(--text);">I know the footpath measurement</strong>
-      </button>
-      <button class="btn-secondary" style="width:100%;text-align:left;padding:16px;" onclick="chooseCalMethod(2)">
-        <strong style="display:block;font-size:14px;color:var(--text);">I don't know the measurement</strong>
-      </button>
-    </div>
-
-    <div id="cal-method1-panel" style="display:none;margin-top:10px;">
-      <div class="form-group">
-        <label class="form-label">Footpath Width (mm)</label>
-        <input class="form-input" id="cal-ref-input" type="number" placeholder="e.g. 1500">
-      </div>
-      <div class="modal-actions">
-        <button class="btn-secondary" onclick="chooseCalMethod(0)">Back</button>
-        <button class="btn-primary" style="flex:1;" onclick="doCalibrate()">Apply Calibration</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ═══════════ A4 CALIBRATION INSTRUCTIONS MODAL ═══════════ -->
-<div class="modal-overlay" id="a4-instructions-modal" style="display:none;" onclick="closeModal('a4-instructions-modal',event)">
-  <div class="modal-sheet" onclick="event.stopPropagation()">
-    <div class="modal-handle"></div>
-    <div class="modal-title">Calibrate with A4 Paper</div>
-
-    <div style="background:var(--surface);border-radius:var(--r);padding:14px;border:1px solid var(--border);margin-bottom:14px;">
-      <svg viewBox="0 0 300 200" width="100%" style="max-width:260px;display:block;margin:0 auto;">
-        <!-- Footpath receding to a single vanishing point -->
-        <polygon points="20,190 280,190 150,50" fill="#101a2c" stroke="#253449" stroke-width="1"/>
-        <!-- A4 sheet, landscape, lying flat on the footpath — its short edges
-             run toward the same vanishing point as the footpath itself, so it
-             narrows toward the far edge exactly like the footpath does. -->
-        <polygon points="126.4,110 173.6,110 193.2,160 106.8,160"
-                 fill="#e879f9" fill-opacity="0.2" stroke="#e879f9" stroke-width="2.5"/>
-        <circle cx="126.4" cy="110" r="4" fill="#e879f9"/>
-        <text x="126.4" y="100" font-size="11" font-weight="700" fill="#e879f9" text-anchor="middle">1</text>
-        <circle cx="173.6" cy="110" r="4" fill="#e879f9"/>
-        <text x="173.6" y="100" font-size="11" font-weight="700" fill="#e879f9" text-anchor="middle">2</text>
-        <circle cx="106.8" cy="160" r="4" fill="#e879f9"/>
-        <text x="106.8" y="176" font-size="11" font-weight="700" fill="#e879f9" text-anchor="middle">3</text>
-        <circle cx="193.2" cy="160" r="4" fill="#e879f9"/>
-        <text x="193.2" y="176" font-size="11" font-weight="700" fill="#e879f9" text-anchor="middle">4</text>
-      </svg>
-    </div>
-
-    <div class="form-hint" style="display:block;margin-bottom:16px;line-height:1.5;">
-      Lay an A4 sheet flat on the footpath — landscape, shorter edge lined up along the footpath — then photograph it with all 4 corners visible.
-    </div>
-
-    <div class="modal-actions">
-      <button class="btn-secondary" onclick="closeModal('a4-instructions-modal');openCalModal();">Back</button>
-      <button class="btn-primary" style="flex:1;" onclick="closeModal('a4-instructions-modal');startA4Mode();">Start Marking →</button>
-    </div>
-  </div>
-</div>
-
 <!-- ═══════════════════ REPLACE MENU MODAL ═══════════════════ -->
 <div class="modal-overlay" id="replace-modal" style="display:none;" onclick="closeReplaceModal(event)">
   <div class="modal-sheet" onclick="event.stopPropagation()" style="padding-bottom:28px;">
@@ -813,7 +818,7 @@ td.hi{color:white;font-weight:700;}
 
     <div class="modal-actions" style="margin-top:16px;">
       <button class="btn-secondary" onclick="closeModal('cal-guide-modal')">Got it</button>
-      <button class="btn-primary" style="flex:1;" onclick="closeModal('cal-guide-modal');openCalModal();">Calibrate Now →</button>
+      <button class="btn-primary" style="flex:1;" onclick="closeModal('cal-guide-modal');switchTab('calibration');">Calibrate Now →</button>
     </div>
   </div>
 </div>
@@ -846,7 +851,7 @@ var S = {
   // Property line (building offset) — activated by tapping corner knob
   pActive:false, pBx:0, pZY:0, pLocked:false, pLockedExit:null, pLockedBx:null, pLockedZY:null,
   eyeH:1200, scaleFactor:1.0, focal:0,
-  cal:{method1:null, method2:null}, calMethod:'method2',
+  cal:{method1:null, method2:null}, calMethod:'method2', calTab:'measurement', calStep:null, calResultShown:false,
   drag:null, _lp:{x:0,y:0}, startP:{x:0,y:0}, moved:false,
   // A4-sheet calibration mode (Method 2) — two tapped points on the sheet's edges
   aMode:false, aPts:[],
@@ -1110,13 +1115,7 @@ function startMain() {
   // whichever one is currently driving S.scaleFactor for live measurement.
   var cached = JSON.parse(localStorage.getItem(calKey()) || '{}');
   S.cal = { method1: cached.method1_calibration || null, method2: cached.method2_scale_factor || null };
-  applyCalMethod('method2'); // default, per the dropdown's default option
-
-  // Show first-use calibration nudge — only if neither method has ever run
-  var isFirstUse = !S.cal.method1 && !S.cal.method2;
-  var nudge = document.getElementById("cal-nudge");
-  nudge.style.display = isFirstUse ? "block" : "none";
-  if (isFirstUse) document.getElementById("nudge-model").textContent = U.model;
+  applyCalMethod('method2'); // default, per the dropdown's default option; also refreshes the status box
 
   // Show setup banner if no Apps Script configured
   document.getElementById('setup-banner').style.display =
@@ -1172,8 +1171,7 @@ function syncCalibrationFromServer() {
         method1_calibration: S.cal.method1, method2_scale_factor: S.cal.method2
       }));
 
-      applyCalMethod(S.calMethod); // refresh in case the selected method's value just arrived
-      if (S.cal.method1 || S.cal.method2) document.getElementById('cal-nudge').style.display = 'none';
+      applyCalMethod(S.calMethod); // refresh in case the selected method's value just arrived, also refreshes status box
     })
     .catch(function(){});
 }
@@ -1262,6 +1260,7 @@ function loadFile(e) {
       svg.addEventListener('pointercancel',onPU, { passive:true  });
       redraw();
       e.target.value = '';
+      if (S.calTab === 'calibration') onCalScreenPhotoLoaded();
   };
   im.src = url;
 }
@@ -1418,6 +1417,13 @@ function pMid(a,b) { return {x:(a.x+b.x)/2,y:(a.y+b.y)/2}; }
 // ─── POINTER EVENTS ────────────────────────────────────────────────────────────
 function onPD(e) {
   var raw = svgRaw(e);
+  // Pointer capture must go on this stable element, never on e.target: the
+  // finger can land on a <line>/<circle> drawn inside #g-ui, and redraw()
+  // replaces that entire subtree's innerHTML on the very next frame. Once
+  // the originally-captured node is destroyed, further move/up events for
+  // that pointer stop being delivered reliably — which is exactly the
+  // "works once or twice then locks up" symptom this was causing.
+  var svgEl = document.getElementById('svg');
   var wasEmpty = Object.keys(_ptrs).length === 0;
   _ptrs[e.pointerId] = raw;
   var ids = Object.keys(_ptrs);
@@ -1443,18 +1449,37 @@ function onPD(e) {
   // treated as placing a corner point, and the VP looks stuck.
   if (Math.hypot(p.x-S.vp.x,p.y-S.vp.y) < 50*hr) {
     S.drag = 'vp';
-    try { e.target.setPointerCapture(e.pointerId); } catch(ex) {}
+    try { svgEl.setPointerCapture(e.pointerId); } catch(ex) {}
     S._lp = p; S._rawLp = raw;
     return;
   }
 
-  // A4 calibration mode — don't place the point yet. If a second finger
-  // lands right after (pinch-zoom to see the corner better), _multiTouch
-  // flips true above and onPU skips placement entirely. Only a genuine
-  // single-finger tap-and-release commits the point (see onPU).
+  // A4 calibration mode. A tap landing on an already-placed corner drags
+  // that corner instead of placing a new one — otherwise there was no way
+  // to nudge a mis-tapped point without hitting Retake and redoing all 4.
   if (S.aMode) {
-    S.drag = 'a4tap';
-    S._lp = p; S._rawLp = raw;
+    for (var ai = 0; ai < S.aPts.length; ai++) {
+      if (Math.hypot(p.x-S.aPts[ai].x, p.y-S.aPts[ai].y) < 40*hr) {
+        S.drag = 'a4pt';
+        S.dragIdx = ai;
+        try { svgEl.setPointerCapture(e.pointerId); } catch(ex) {}
+        S._lp = p; S._rawLp = raw;
+        return;
+      }
+    }
+    // Not on an existing corner. If all 4 are already placed, ignore this
+    // tap rather than silently wiping every corner — Retake is the explicit
+    // way to start over now. Otherwise, don't place the point yet: if a
+    // second finger lands right after (pinch-zoom to see the corner
+    // better), _multiTouch flips true above and onPU skips placement
+    // entirely. Only a genuine single-finger tap-and-release commits the
+    // point (see onPU).
+    if (S.aPts.length < 4) {
+      S.drag = 'a4tap';
+      S._lp = p; S._rawLp = raw;
+    } else {
+      S.drag = null;
+    }
     return;
   }
   var wXz=lineX(S.wBx,S.wZY), kXm=lineX(S.kBx,S.kMY);
@@ -1471,7 +1496,7 @@ function onPD(e) {
   else                                                                         S.drag = Z.scale>1.05 ? 'pan' : null;
 
   if (!S.drag) return;
-  try { e.target.setPointerCapture(e.pointerId); } catch(ex) {}
+  try { svgEl.setPointerCapture(e.pointerId); } catch(ex) {}
   S._lp = p; S._rawLp = raw;
 }
 
@@ -1535,6 +1560,11 @@ function onPM(e) {
       var tXp=lineX(S.pBx,S.pZY)+dx*2;
       tXp=Math.max(FENCE,Math.min(S.W-FENCE,tXp));
       S.pBx=clampBx(S.vp.x+(tXp-S.vp.x)*(S.H-S.vp.y)/(S.pZY-S.vp.y),S.pZY);
+    } else if (S.drag==='a4pt') {
+      S.aPts[S.dragIdx] = {
+        x: Math.max(FENCE,Math.min(S.W-FENCE,p.x)),
+        y: Math.max(FENCE,Math.min(S.H-FENCE,p.y))
+      };
     }
     S._lp=p; S._rawLp=raw; redraw();
   }
@@ -2177,10 +2207,6 @@ function resetForNext() {
   var oir=document.getElementById('offset-input-row'); if(oir){oir.style.display='none';}
   var oif=document.getElementById('manual-offset-mm'); if(oif){oif.value='';}
   var ob=document.getElementById('offset-badge'); if(ob){ob.style.display='none';}
-  S.selMats.clear();
-  ['paver','cement','mud'].forEach(function(m){
-    document.getElementById('mat-'+m).classList.remove('sel');
-  });
   // Zero/kerb locks reset; VP lock PRESERVED
   S.wLocked=false; S.kLocked=false; S.wLockedExit=null; S.kLockedExit=null;
   updateLockBtns();
@@ -2189,28 +2215,8 @@ function resetForNext() {
 }
 
 // ─── CALIBRATION ───────────────────────────────────────────────────────────────
-function openCalModal() {
-  // A locked vanishing point or locked building/kerb edge (a tap toggles the
-  // lock — see onPU) silently carries over from a previous photo/session.
-  // If it's still locked when you try to recalibrate, you can't reposition
-  // it to match the new photo, so the "recalibration" just reuses stale
-  // geometry — which looks exactly like calibration refusing to override.
-  // Unlocking here means every calibration attempt starts fully adjustable.
-  S.vp.locked = false;
-  S.wLocked = false; S.wLockedExit = null; S.wLockedBx = null; S.wLockedZY = null;
-  S.kLocked = false; S.kLockedExit = null; S.kLockedBx = null; S.kLockedMY = null;
-  if (S.imgLoaded) redraw();
-
-  document.getElementById('cal-ref-input').value       = '';
-  document.getElementById('cal-method1-panel').style.display = 'none';
-  document.getElementById('cal-modal').style.display   = 'flex';
-}
-function closeCalModal(e) {
-  if(!e||e.target===document.getElementById('cal-modal'))
-    document.getElementById('cal-modal').style.display='none';
-}
 function doCalibrate() {
-  if (!S.imgLoaded) { showToast('Load image & position lines first','error'); return; }
+  if (!S.imgLoaded) { showToast('Take a photo first','error'); return; }
   var refMM = parseFloat(document.getElementById('cal-ref-input').value);
   if (!refMM) { showToast('Enter the footpath width','error'); return; }
 
@@ -2221,24 +2227,32 @@ function doCalibrate() {
   localStorage.setItem(calKey(), JSON.stringify({
     method1_calibration: S.cal.method1, method2_scale_factor: S.cal.method2
   }));
-  applyCalMethod('method1'); // show this method's result immediately
-  closeCalModal();
-  showToast('Method 1 calibration saved for '+U.model,'success');
-  document.getElementById('cal-nudge').style.display='none';
+  applyCalMethod('method1'); // show this method's result immediately, also refreshes status box
   logCalibrationToSheet('Tape Measure', { method1_calibration: S.cal.method1 });
+
+  showCalResult(S.scaleFactor);
 }
 function resetCal() {
   if(!confirm('Reset calibration for '+U.model+'? This clears both Method 1 and Method 2 values saved on this device.')) return;
   S.cal = { method1: null, method2: null };
   localStorage.removeItem(calKey());
   applyCalMethod(S.calMethod);
-  closeCalModal();
   showToast('Calibration reset','info');
 }
 function updateCalBadge() {
   var el=document.getElementById('cal-badge');
   el.textContent='Scale: '+S.scaleFactor.toFixed(2)+'×';
   el.classList.toggle('calibrated', S.scaleFactor!==1.0);
+
+  // Single source of truth for the calibration status box's two states —
+  // called from applyCalMethod(), so every place scaleFactor can change
+  // (login sync, doCalibrate, solveA4Calibration, resetCal) keeps this in
+  // sync automatically without each of them managing it separately.
+  var calibrated = !!(S.cal.method1 || S.cal.method2);
+  var emptyEl = document.getElementById('cal-status-empty');
+  var setEl   = document.getElementById('cal-status-set');
+  if (emptyEl) emptyEl.style.display = calibrated ? 'none' : 'flex';
+  if (setEl)   setEl.style.display   = calibrated ? 'flex' : 'none';
 }
 
 // ─── CAMERA HEIGHT FROM PERSON'S HEIGHT ───────────────────────────────────────
@@ -2248,37 +2262,152 @@ function updateCalBadge() {
 // adult. This just gives a starting point — Method 1 or Method 2 calibration
 // still does the real correction afterward.
 var CAMERA_HEIGHT_RATIO = 0.70;
-// Toggles which calibration method's fields are shown. 0 = collapse back to
-// the chooser, 1 = reveal the known-width fields inline, 2 = hand off to the
-// A4 instructions modal (which itself leads into startA4Mode()).
-function chooseCalMethod(n) {
-  var panel1 = document.getElementById('cal-method1-panel');
-  if (n === 1) {
-    panel1.style.display = 'block';
-  } else if (n === 2) {
-    panel1.style.display = 'none';
-    closeCalModal();
-    document.getElementById('a4-instructions-modal').style.display = 'flex';
+
+// ─── MEASUREMENT / CALIBRATION TABS ────────────────────────────────────────────
+// The photo stays fixed at the top of the screen always; only the panel
+// below it changes shape depending on S.calTab (which tab) and S.calStep
+// (where within the Calibration tab you are). See updateTabUI() for the
+// single place that reconciles all of this into actual show/hide calls.
+
+// Switching tabs is a no-op if you're already on that tab. Leaving the
+// Calibration tab abandons whatever step you were on: Method 2's forced
+// fresh photo is cleared (it's a photo of an A4 sheet, not useful for
+// measurement), but Method 1's photo is left alone since it was already
+// whatever was loaded for measurement to begin with.
+function switchTab(tab) {
+  if (S.calTab === tab) return;
+  S.calTab = tab;
+
+  if (tab === 'measurement') {
+    if (S.calStep === 'method2') {
+      S.aMode = false; S.aPts = [];
+      resetForNext();
+    }
+    S.calStep = null;
+    S.calResultShown = false;
   } else {
-    panel1.style.display = 'none';
+    S.calStep = 'choose';
+    S.calResultShown = false;
+  }
+  updateTabUI();
+}
+
+// Picking a method from the Calibration tab's chooser panel.
+function selectCalMethod(method) {
+  S.calStep = method;
+
+  // Unlock VP/edges so calibration can freely reposition them — a lock left
+  // over from a previous session would otherwise silently block an
+  // accurate recalibration (a tap toggles these locks — see onPU).
+  S.vp.locked = false;
+  S.wLocked = false; S.wLockedExit = null; S.wLockedBx = null; S.wLockedZY = null;
+  S.kLocked = false; S.kLockedExit = null; S.kLockedBx = null; S.kLockedMY = null;
+  if (S.imgLoaded) redraw();
+
+  if (method === 'method2') {
+    // A4 always needs its own fresh, camera-only photo — clear whatever's
+    // currently loaded so a real footpath photo never gets mistaken for
+    // the calibration sheet.
+    resetForNext();
+  }
+  // Method 1 deliberately does NOT clear the photo: it works on whatever is
+  // already loaded, or — if nothing's loaded yet — the normal upload prompt
+  // (gallery or camera) is still right there in the photo area.
+
+  updateTabUI();
+}
+
+// The "Back" button inside either method's panel — returns to the chooser
+// without leaving the Calibration tab entirely.
+function backToChooseMethod() {
+  if (S.calStep === 'method2') {
+    S.aMode = false; S.aPts = [];
+    resetForNext(); // that photo was only ever for the A4 shot
+  }
+  S.calStep = 'choose';
+  S.calResultShown = false;
+  updateTabUI();
+}
+
+// Called once a fresh photo finishes loading while Method 2 is the active
+// step (see loadFile()). Jumps straight into corner-tapping — no separate
+// "Start Marking" step needed since this whole flow is already dedicated
+// to that one task.
+function onCalScreenPhotoLoaded() {
+  if (S.calTab === 'calibration' && S.calStep === 'method2') {
+    S.aMode = true;
+    S.aPts = [];
+    updateA4Panel();
+    updateTouchAction();
+    redraw();
+  }
+  updateTabUI();
+}
+
+// Shows the shared result step (used by both methods) with the scale factor
+// just solved, and a single button to head back to the Measurement tab.
+function showCalResult(scaleFactor) {
+  document.getElementById('cal-result-text').textContent =
+    'Calibrated ✓ — Scale factor: ' + scaleFactor.toFixed(3) + '×';
+  S.calResultShown = true;
+  updateTabUI();
+}
+
+// "Test Measurement" — heads back to the Measurement tab. Method 2's photo
+// (the A4 sheet) is cleared since it isn't useful for actual measurement;
+// Method 1's photo is left exactly as it is, since it's already correctly
+// positioned and scaled for measuring right now.
+function finishCalScreen() {
+  var wasMethod2 = S.calStep === 'method2';
+  S.calTab = 'measurement';
+  S.calStep = null;
+  S.calResultShown = false;
+  if (wasMethod2) resetForNext();
+  updateTabUI();
+  showToast(wasMethod2
+    ? 'Now take or choose a photo to measure the footpath'
+    : 'Ready to measure with this photo', 'info');
+}
+
+// The single place that reconciles (S.calTab, S.calStep, S.calResultShown,
+// S.imgLoaded) into actual show/hide calls. Every transition above ends by
+// calling this — nothing else should toggle these elements directly.
+function updateTabUI() {
+  var inCal    = S.calTab === 'calibration';
+  var isChoose = S.calStep === 'choose';
+  var isM1     = S.calStep === 'method1';
+  var isM2     = S.calStep === 'method2';
+  var showResult = inCal && S.calResultShown;
+
+  document.getElementById('cal-choose-panel').style.display   = (inCal && isChoose && !showResult) ? 'block' : 'none';
+  document.getElementById('a4-panel').style.display           = (inCal && isM2 && S.aMode && !showResult) ? 'block' : 'none';
+  document.getElementById('m1-cal-panel').style.display       = (inCal && isM1 && S.imgLoaded && !showResult) ? 'block' : 'none';
+  document.getElementById('cal-result-panel').style.display   = showResult ? 'block' : 'none';
+  document.getElementById('a4-precapture-hint').style.display = (inCal && isM2 && !S.imgLoaded) ? 'block' : 'none';
+  document.getElementById('upload-btn-gallery').style.display = (inCal && isM2) ? 'none' : '';
+
+  // Measurement-only chrome: hidden for every Calibration-tab state except
+  // Method 1, which still needs the width readout to align edges precisely.
+  document.getElementById('ftr-section').style.display = (inCal && !isM1) ? 'none' : '';
+  document.getElementById('submit-sec').style.display   = inCal ? 'none' : '';
+  document.getElementById('recsec').style.display       = inCal ? 'none' : '';
+  var pk = document.getElementById('prop-knob');
+  if (pk && inCal) pk.style.display = 'none';
+
+  if (inCal) {
+    document.getElementById('setup-banner').style.display = 'none';
+    document.getElementById('cal-status-box').style.display = 'none';
+  } else {
+    // Restore based on current conditions when back on the Measurement tab.
+    // The empty-vs-calibrated state itself is kept in sync separately by
+    // updateCalBadge() — this just controls whether the box is shown at all.
+    document.getElementById('setup-banner').style.display = APPS_SCRIPT_URL ? 'none' : 'block';
+    document.getElementById('cal-status-box').style.display = '';
   }
 }
 
-
-// Alternative to typing in a known reference width (Method 1): place a real
-// A4 sheet flat on the ground in the photo, tap its four corners, and let the
-// sheet's standard 210×297mm dimensions calibrate both eyeH and scaleFactor
-// simultaneously. Eliminates the need to estimate camera height.
-function startA4Mode() {
-  if (!S.imgLoaded) { showToast('Load a photo first','error'); return; }
-  closeCalModal();
-  S.aMode = true;
-  S.aPts = [];
-  document.getElementById('a4-panel').style.display = 'block';
-  updateA4Panel();
-  updateTouchAction();
-  redraw();
-}
+// Resets just the A4-tapping state (used internally on solve errors) —
+// distinct from backToChooseMethod()/switchTab(), which back out further.
 function cancelA4Mode() {
   S.aMode = false;
   S.aPts = [];
@@ -2406,37 +2535,19 @@ function solveA4Calibration() {
     localStorage.setItem(calKey(), JSON.stringify({
       method1_calibration: S.cal.method1, method2_scale_factor: S.cal.method2
     }));
-    applyCalMethod('method2'); // show this method's result immediately
-    document.getElementById('cal-nudge').style.display = 'none';
+    applyCalMethod('method2'); // show this method's result immediately, also refreshes status box
     logCalibrationToSheet('A4 Sheet', { method2_scale_factor: S.cal.method2 });
 
-    // Show the result and ask whether to try measurement now, rather than
-    // just closing the panel — a mis-tap giving a clearly-wrong scale factor
-    // is easy to spot here, and hard to notice after the panel has vanished.
-    var txt = document.getElementById('a4-panel-text');
-    var choices = document.getElementById('a4-panel-choices');
-    txt.textContent = 'Calibrated ✓ — Scale factor: ' + S.scaleFactor.toFixed(3) + '×';
-    choices.style.display = 'block';
-    choices.innerHTML =
-      '<div style="display:flex;gap:8px;margin-bottom:8px;">'
-      + '<button onclick="finishA4Calibration(false)" style="flex:1;background:transparent;border:1px solid rgba(255,255,255,0.2);color:#94a3b8;border-radius:8px;padding:9px;font-size:12px;cursor:pointer;font-family:inherit;">Not now</button>'
-      + '<button onclick="finishA4Calibration(true)" style="flex:1;background:#e879f9;border:none;color:#1a0e22;border-radius:8px;padding:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">Try Measurement →</button>'
-      + '</div>';
-    document.getElementById('a4-cancel-btn').style.display = 'none';
+    S.aMode = false;
+    S.aPts = [];
+    document.getElementById('a4-panel').style.display = 'none';
+    updateTouchAction();
+    redraw();
+    showCalResult(S.scaleFactor);
   } catch(err) {
     console.error('A4 calibration error:', err);
     showToast('Calibration failed: ' + err.message, 'error');
     cancelA4Mode();
-  }
-}
-// Closes out of A4 mode after the result step above. tryMeasurement just
-// controls whether a helpful nudge toast appears — either way, this returns
-// to the same main screen where the building/kerb edges are adjusted.
-function finishA4Calibration(tryMeasurement) {
-  document.getElementById('a4-cancel-btn').style.display = 'block';
-  cancelA4Mode();
-  if (tryMeasurement) {
-    showToast('Now position the Building edge and Kerb edge lines to measure the footpath','info');
   }
 }
 
