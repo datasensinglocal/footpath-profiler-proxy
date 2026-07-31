@@ -1223,15 +1223,20 @@ function calKey() {
   return 'fp_cal_' + (U.email || '').trim().toLowerCase() + '|' + (U.model || '').trim().toLowerCase();
 }
 
-// Best-effort fetch of the shared scaleFactor for this (email, model) pair.
-// Silent no-op on failure, missing URL, or no row yet for this person+phone.
+// Best-effort fetch of the shared calibration for this (email, model) pair.
+// Prefers the A4 method's scale factor (method2_scale_factor) since it's the
+// more precise, current method; falls back to the manual-edges method
+// (method1_calibration) if that's the only one on record for this person+phone.
+// Silent no-op on failure, missing URL, or no row yet.
 function syncCalibrationFromServer() {
   if (!APPS_SCRIPT_URL) return;
   postToScript({ action: 'getCalibration', email: U.email, model: U.model })
     .then(function(res) {
-      if (!res || !res.calibration || !res.calibration.scaleFactor) return;
+      if (!res || !res.calibration) return;
+      var sf = res.calibration.method2_scale_factor || res.calibration.method1_calibration;
+      if (!sf) return;
 
-      S.scaleFactor = res.calibration.scaleFactor;
+      S.scaleFactor = sf;
       localStorage.setItem(calKey(), JSON.stringify({ scaleFactor: S.scaleFactor }));
 
       updateCalBadge();
@@ -1696,7 +1701,10 @@ function redraw() {
   var dash_guide = (8*isc)+','+(5*isc);
   var dash_w     = (4*isc)+' '+(3*isc);
 
-  // Perspective guide lines — draw to frozen exit point when locked
+  // Perspective guide lines — draw to frozen exit point when locked.
+  // Not shown during A4 mode: Method 2 only uses the tapped corners + VP,
+  // these lines would just be visual clutter/confusing during that flow.
+  if (!S.aMode) {
   u+='<line x1="'+S.vp.x+'" y1="'+S.vp.y+'" x2="'+p0.x+'" y2="'+p0.y
     +'" stroke="#f59e0b" stroke-width="'+(S.wLocked?sw_thick:sw_line)+'" '
     +(S.wLocked?'':'stroke-dasharray="'+dash_guide+'" ')+'opacity="'+(S.wLocked?1:0.8)+'"/>';
@@ -1709,6 +1717,7 @@ function redraw() {
   var kXcDraw = lineX(kBxDraw, kMYDraw);
   u+='<line x1="'+wXcDraw+'" y1="'+kMYDraw+'" x2="'+kXcDraw+'" y2="'+kMYDraw
     +'" stroke="white" stroke-width="'+sw_width+'" stroke-dasharray="'+dash_w+'" opacity="0.5"/>';
+  }
 
   // Helper: counter-scaled group at a point
   // transform="translate(x,y) scale(isc)" keeps visual size constant
@@ -1728,7 +1737,8 @@ function redraw() {
       +'</g>';
   }
 
-  // Building edge handle
+  // Building + kerb edge handles — also hidden during A4 mode (see above)
+  if (!S.aMode) {
   var wExit = (S.wLocked && S.wLockedExit) ? S.wLockedExit : p0;
   if(S.wLocked) {
     u+='<g transform="translate('+wExit.x.toFixed(1)+','+wExit.y.toFixed(1)+') scale('+sc+')">'
@@ -1750,7 +1760,6 @@ function redraw() {
       +'</g>';
   }
 
-  // Kerb edge handle
   var kExit = (S.kLocked && S.kLockedExit) ? S.kLockedExit : p1;
   if(S.kLocked) {
     u+='<g transform="translate('+kExit.x.toFixed(1)+','+kExit.y.toFixed(1)+') scale('+sc+')">'
@@ -1770,10 +1779,10 @@ function redraw() {
       +'<text x="'+(kLX+kLW/2)+'" y="6" font-size="14" font-weight="700" fill="white" text-anchor="middle">Kerb edge</text>'
       +'</g>';
   }
+  }
 
   // ── Property line handle (purple) — only when active ──
-  if (S.pActive) {
-    // Use frozen values when locked
+  if (S.pActive && !S.aMode) {
     var pBxDraw = (S.pLocked && S.pLockedBx != null) ? S.pLockedBx : S.pBx;
     var pZYDraw = (S.pLocked && S.pLockedZY != null) ? S.pLockedZY : S.pZY;
     var pp0     = (S.pLocked && S.pLockedExit) ? S.pLockedExit : exitPoint(pBxDraw);
@@ -2145,19 +2154,22 @@ function compressImage(dataUrl, maxPx, quality) {
 // Best-effort log of a calibration event to the "Calibrations" sheet tab —
 // one row per (email, phone model) pair, kept unique by an upsert on the
 // Apps Script side. Eye height isn't sent: it's derived from height on every
-// login (see doLogin), so it's never the shared/looked-up value — only
-// scale_factor is. Never blocks the calibration UI flow — failures are silent.
-function logCalibrationToSheet(method) {
+// login (see doLogin), so it's never the shared/looked-up value.
+//
+// Method 1 (manual edges + a known real-world width) and Method 2 (A4 sheet)
+// write to two different columns — method1_calibration vs method2_scale_factor
+// — so both stay on record independently instead of one overwriting the other.
+// `fields` carries exactly one of those two keys. Never blocks the
+// calibration UI flow — failures are silent.
+function logCalibrationToSheet(method, fields) {
   if (!APPS_SCRIPT_URL) return;
-  postToScript({
-    action: 'logCalibration',
-    row: {
-      surveyor: U.name, email: U.email, height: U.heightCM,
-      phone_model: U.model, phone_number: U.phone,
-      scale_factor: S.scaleFactor,
-      method: method, timestamp: new Date().toISOString()
-    }
-  }).catch(function(){});
+  var row = {
+    surveyor: U.name, email: U.email, height: U.heightCM,
+    phone_model: U.model, phone_number: U.phone,
+    method: method, timestamp: new Date().toISOString()
+  };
+  for (var k in fields) row[k] = fields[k];
+  postToScript({ action: 'logCalibration', row: row }).catch(function(){});
 }
 
 // ─── APPS SCRIPT COMMUNICATION ────────────────────────────────────────────────
@@ -2250,7 +2262,7 @@ function doCalibrate() {
   showToast('Calibration saved for '+U.model,'success');
   document.getElementById('cal-nudge').style.display='none';
   document.getElementById('btn-cal-hdr').classList.toggle('active', S.scaleFactor!==1.0);
-  logCalibrationToSheet(refMM ? 'Tape Measure' : 'Manual Height');
+  if (refMM) logCalibrationToSheet('Tape Measure', { method1_calibration: S.scaleFactor });
 }
 function resetCal() {
   if(!confirm('Reset calibration for '+U.model+'?')) return;
@@ -2453,7 +2465,7 @@ function solveA4Calibration() {
     showToast(msg, 'success');
     document.getElementById('cal-nudge').style.display = 'none';
     document.getElementById('btn-cal-hdr').classList.toggle('active', S.scaleFactor !== 1.0);
-    logCalibrationToSheet('A4 Sheet');
+    logCalibrationToSheet('A4 Sheet', { method2_scale_factor: S.scaleFactor });
   } catch(err) {
     console.error('A4 calibration error:', err);
     showToast('Calibration failed: ' + err.message, 'error');
