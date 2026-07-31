@@ -117,9 +117,9 @@ body{
 .vwrap{
   position:relative;width:94%;margin:12px auto;
   background:#000;border-radius:var(--r);overflow:hidden;
-  border:1px solid var(--border);flex-shrink:0;touch-action:pan-y;
+  border:1px solid var(--border);flex-shrink:0;touch-action:none;
 }
-#svg{display:block;touch-action:pan-y;width:100%;height:auto;}
+#svg{display:block;touch-action:none;width:100%;height:auto;}
 .empty{
   min-height:280px;display:flex;flex-direction:column;
   align-items:center;justify-content:center;
@@ -502,7 +502,7 @@ td.hi{color:white;font-weight:700;}
       <div style="background:rgba(12,18,32,0.92);backdrop-filter:blur(8px);border:1px solid rgba(232,121,249,0.4);border-radius:12px;padding:12px 14px;">
         <div id="a4-panel-text" style="font-size:12px;color:#f0f4f8;margin-bottom:10px;line-height:1.4;">Tap the top-left corner of the A4 sheet.</div>
         <div id="a4-panel-choices" style="display:none;"></div>
-        <button onclick="cancelA4Mode()" style="width:100%;background:transparent;border:1px solid rgba(255,255,255,0.15);color:#94a3b8;border-radius:8px;padding:7px;font-size:11px;cursor:pointer;touch-action:manipulation;font-family:inherit;">Cancel</button>
+        <button onclick="cancelA4Mode()" id="a4-cancel-btn" style="width:100%;background:transparent;border:1px solid rgba(255,255,255,0.15);color:#94a3b8;border-radius:8px;padding:7px;font-size:11px;cursor:pointer;touch-action:manipulation;font-family:inherit;">Cancel</button>
       </div>
     </div>
   </div>
@@ -593,58 +593,6 @@ td.hi{color:white;font-weight:700;}
     </div>
   </div>
 
-  <!-- Materials -->
-  <div class="mat-sec">
-    <div class="sec-lbl">Footpath Material</div>
-    <div class="mat-grid">
-      <div class="mat-item" id="mat-paver" onclick="toggleMat('paver')">
-        <div class="mat-thumb">
-          <svg width="56" height="56" viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg">
-            <rect width="56" height="56" fill="#8b96a8"/>
-            <rect x="1" y="1" width="25" height="25" fill="#c8cdd6" rx="1.5"/>
-            <rect x="30" y="1" width="25" height="25" fill="#c8cdd6" rx="1.5"/>
-            <rect x="1" y="30" width="25" height="25" fill="#c8cdd6" rx="1.5"/>
-            <rect x="30" y="30" width="25" height="25" fill="#c8cdd6" rx="1.5"/>
-            <rect x="1" y="1" width="25" height="25" fill="none" stroke="#a0a8b4" stroke-width="0.5" rx="1.5"/>
-            <rect x="30" y="1" width="25" height="25" fill="none" stroke="#a0a8b4" stroke-width="0.5" rx="1.5"/>
-            <rect x="1" y="30" width="25" height="25" fill="none" stroke="#a0a8b4" stroke-width="0.5" rx="1.5"/>
-            <rect x="30" y="30" width="25" height="25" fill="none" stroke="#a0a8b4" stroke-width="0.5" rx="1.5"/>
-          </svg>
-        </div>
-        <span class="mat-name">Paver Blocks</span>
-      </div>
-      <div class="mat-item" id="mat-cement" onclick="toggleMat('cement')">
-        <div class="mat-thumb">
-          <svg width="56" height="56" viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg">
-            <rect width="56" height="56" fill="#b8bec8"/>
-            <line x1="0" y1="14" x2="56" y2="14" stroke="#9ea6b4" stroke-width="0.8"/>
-            <line x1="0" y1="28" x2="56" y2="28" stroke="#9ea6b4" stroke-width="0.8"/>
-            <line x1="0" y1="42" x2="56" y2="42" stroke="#9ea6b4" stroke-width="0.8"/>
-            <line x1="14" y1="0" x2="14" y2="56" stroke="#9ea6b4" stroke-width="0.8"/>
-            <line x1="28" y1="0" x2="28" y2="56" stroke="#9ea6b4" stroke-width="0.8"/>
-            <line x1="42" y1="0" x2="42" y2="56" stroke="#9ea6b4" stroke-width="0.8"/>
-            <rect x="8" y="3" width="12" height="8" rx="1" fill="#cdd2da" opacity="0.5"/>
-            <rect x="34" y="20" width="16" height="6" rx="1" fill="#cdd2da" opacity="0.4"/>
-          </svg>
-        </div>
-        <span class="mat-name">Cement</span>
-      </div>
-      <div class="mat-item" id="mat-mud" onclick="toggleMat('mud')">
-        <div class="mat-thumb">
-          <svg width="56" height="56" viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg">
-            <rect width="56" height="56" fill="#8b6040"/>
-            <ellipse cx="14" cy="18" rx="10" ry="5" fill="#6b4828" opacity="0.6"/>
-            <ellipse cx="38" cy="38" rx="12" ry="6" fill="#6b4828" opacity="0.55"/>
-            <ellipse cx="30" cy="10" rx="7" ry="3.5" fill="#a07050" opacity="0.5"/>
-            <ellipse cx="8" cy="44" rx="6" ry="3" fill="#6b4828" opacity="0.45"/>
-            <ellipse cx="48" cy="20" rx="5" ry="2.5" fill="#a07050" opacity="0.4"/>
-          </svg>
-        </div>
-        <span class="mat-name">Mud / Earth</span>
-      </div>
-    </div>
-  </div>
-
   <!-- Submit -->
   <div class="submit-sec">
     <button class="btn-submit" id="btn-submit" onclick="submitRecord()">SUBMIT</button>
@@ -672,65 +620,25 @@ td.hi{color:white;font-weight:700;}
   <div class="modal-sheet" onclick="event.stopPropagation()">
     <div class="modal-handle"></div>
     <div class="modal-title">Calibrate</div>
-    <div class="modal-sub">Adjust measurement scale for your phone and camera height.</div>
-
-    <div class="info-card" id="cal-info-card">
-      <strong>Phone:</strong> <span id="cal-phone-lbl">—</span><br>
-      <strong>Current scale:</strong> <span id="cal-scale-lbl">1.000×</span><br>
-      <strong>Camera height:</strong> <span id="cal-eyeh-lbl">1200 mm</span>
-    </div>
-
-    <div class="form-group" style="margin-bottom:14px;">
-      <label class="form-label">Your Height (cm) <span style="color:var(--muted);font-weight:400;">(optional)</span></label>
-      <div style="display:flex;gap:8px;">
-        <input class="form-input" id="cal-height-input" type="number" placeholder="e.g. 170" style="flex:1;">
-        <button class="btn-secondary" style="flex:0 0 auto;padding:0 16px;" onclick="estimateEyeHFromHeight()">Estimate</button>
-      </div>
-      <span class="form-hint">Only needed for Method 1. Method 2 (A4 paper) calculates camera height automatically from the sheet's corners.</span>
-    </div>
-
-    <div class="form-group" style="margin-bottom:14px;">
-      <label class="form-label">Camera Height (mm) <span style="color:var(--muted);font-weight:400;">(Method 1 only)</span></label>
-      <input class="form-input" id="cal-eyeh-input" type="number" placeholder="1200" value="1200">
-      <span class="form-hint">For Method 1 calibration. Method 2 (A4 paper) solves this automatically.</span>
-    </div>
-
-    <div class="divider" style="margin-bottom:14px;">Calibrate footpath scale</div>
-    <div class="form-hint" style="margin-bottom:10px;display:block;">Choose how to set the scale for this phone:</div>
 
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:6px;">
-      <button class="btn-secondary" style="width:100%;text-align:left;padding:14px;" onclick="chooseCalMethod(1)">
-        <strong style="display:block;font-size:13px;color:var(--text);margin-bottom:2px;">1 · I know the exact footpath width</strong>
-        <span style="font-size:11px;color:var(--muted);">Type in a measurement you've taken with a tape</span>
+      <button class="btn-secondary" style="width:100%;text-align:left;padding:16px;" onclick="chooseCalMethod(1)">
+        <strong style="display:block;font-size:14px;color:var(--text);">I know the footpath measurement</strong>
       </button>
-      <button class="btn-secondary" style="width:100%;text-align:left;padding:14px;" onclick="chooseCalMethod(2)">
-        <strong style="display:block;font-size:13px;color:var(--text);margin-bottom:2px;">2 · Place an A4 sheet on the footpath</strong>
-        <span style="font-size:11px;color:var(--muted);">No measuring — just tap the sheet's edges in the photo</span>
+      <button class="btn-secondary" style="width:100%;text-align:left;padding:16px;" onclick="chooseCalMethod(2)">
+        <strong style="display:block;font-size:14px;color:var(--text);">I don't know the measurement</strong>
       </button>
     </div>
 
-    <div id="cal-method1-panel" style="display:none;">
-      <div class="cal-steps" style="margin-top:10px;">
-        <div class="cal-step"><div class="step-num">1</div>Position the Building edge and Kerb edge lines exactly on the width you measured</div>
-        <div class="cal-step"><div class="step-num">2</div>Enter that width below and tap Apply Calibration</div>
-      </div>
+    <div id="cal-method1-panel" style="display:none;margin-top:10px;">
       <div class="form-group">
-        <label class="form-label">Known Reference Width (mm)</label>
-        <input class="form-input" id="cal-ref-input" type="number" placeholder="e.g. 600">
-        <span class="form-hint">Leave blank to update camera height only</span>
+        <label class="form-label">Footpath Width (mm)</label>
+        <input class="form-input" id="cal-ref-input" type="number" placeholder="e.g. 1500">
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" onclick="chooseCalMethod(0)">Back</button>
         <button class="btn-primary" style="flex:1;" onclick="doCalibrate()">Apply Calibration</button>
       </div>
-    </div>
-
-    <div class="modal-actions">
-      <button class="btn-secondary" onclick="closeCalModal()">Close</button>
-      <button class="btn-secondary btn-danger" style="flex:1;" onclick="resetCal()">Reset to Default</button>
-    </div>
-    <div class="modal-actions">
-      <button class="btn-secondary" onclick="closeCalModal();openGuideModal();" style="width:100%;">📋 Field Guide</button>
     </div>
   </div>
 </div>
@@ -740,34 +648,29 @@ td.hi{color:white;font-weight:700;}
   <div class="modal-sheet" onclick="event.stopPropagation()">
     <div class="modal-handle"></div>
     <div class="modal-title">Calibrate with A4 Paper</div>
-    <div class="modal-sub">Quick setup — no tape measure or height estimate needed.</div>
 
-    <div style="background:var(--surface);border-radius:var(--r);padding:14px;border:1px solid var(--border);margin-bottom:16px;">
+    <div style="background:var(--surface);border-radius:var(--r);padding:14px;border:1px solid var(--border);margin-bottom:14px;">
       <svg viewBox="0 0 300 200" width="100%" style="max-width:260px;display:block;margin:0 auto;">
-        <polygon points="20,190 280,190 175,68 125,68" fill="#101a2c" stroke="#253449" stroke-width="1"/>
-        <line x1="20" y1="190" x2="125" y2="68" stroke="#f59e0b" stroke-width="3" stroke-linecap="round"/>
-        <line x1="280" y1="190" x2="175" y2="68" stroke="#2dd4bf" stroke-width="3" stroke-linecap="round"/>
-        <rect x="93" y="100" width="114" height="74" rx="2" fill="none" stroke="#e879f9" stroke-width="2.5"/>
-        <circle cx="101" cy="108" r="4" fill="#e879f9"/>
-        <text x="101" y="125" font-size="10" font-weight="600" fill="#e879f9" text-anchor="middle">1</text>
-        <circle cx="207" cy="108" r="4" fill="#e879f9"/>
-        <text x="207" y="125" font-size="10" font-weight="600" fill="#e879f9" text-anchor="middle">2</text>
-        <circle cx="101" cy="167" r="4" fill="#e879f9"/>
-        <text x="101" y="180" font-size="10" font-weight="600" fill="#e879f9" text-anchor="middle">3</text>
-        <circle cx="207" cy="167" r="4" fill="#e879f9"/>
-        <text x="207" y="180" font-size="10" font-weight="600" fill="#e879f9" text-anchor="middle">4</text>
-        <text x="154" y="141" font-size="11" font-weight="700" fill="#f0f4f8" text-anchor="middle">A4</text>
-        <rect x="131" y="150" width="38" height="62" rx="7" fill="#162032" stroke="#f0f4f8" stroke-width="2"/>
-        <rect x="139" y="157" width="22" height="43" rx="2" fill="#060d1a"/>
-        <circle cx="150" cy="204" r="2.5" fill="#6b84a0"/>
+        <!-- Footpath receding to a single vanishing point -->
+        <polygon points="20,190 280,190 150,50" fill="#101a2c" stroke="#253449" stroke-width="1"/>
+        <!-- A4 sheet, landscape, lying flat on the footpath — its short edges
+             run toward the same vanishing point as the footpath itself, so it
+             narrows toward the far edge exactly like the footpath does. -->
+        <polygon points="126.4,110 173.6,110 193.2,160 106.8,160"
+                 fill="#e879f9" fill-opacity="0.2" stroke="#e879f9" stroke-width="2.5"/>
+        <circle cx="126.4" cy="110" r="4" fill="#e879f9"/>
+        <text x="126.4" y="100" font-size="11" font-weight="700" fill="#e879f9" text-anchor="middle">1</text>
+        <circle cx="173.6" cy="110" r="4" fill="#e879f9"/>
+        <text x="173.6" y="100" font-size="11" font-weight="700" fill="#e879f9" text-anchor="middle">2</text>
+        <circle cx="106.8" cy="160" r="4" fill="#e879f9"/>
+        <text x="106.8" y="176" font-size="11" font-weight="700" fill="#e879f9" text-anchor="middle">3</text>
+        <circle cx="193.2" cy="160" r="4" fill="#e879f9"/>
+        <text x="193.2" y="176" font-size="11" font-weight="700" fill="#e879f9" text-anchor="middle">4</text>
       </svg>
     </div>
 
-    <div class="cal-steps">
-      <div class="cal-step"><div class="step-num">1</div>Turn your phone to <strong style="color:var(--text);">portrait</strong> orientation — the app's perspective math assumes a portrait photo.</div>
-      <div class="cal-step"><div class="step-num">2</div>Lay a sheet of A4 paper flat on the ground, <strong style="color:var(--text);">across the footpath</strong> (perpendicular to the direction you're walking), roughly in the lower-middle of the frame.</div>
-      <div class="cal-step"><div class="step-num">3</div>Take the photo with all four corners of the sheet clearly visible, then tap "Start Marking".</div>
-      <div class="cal-step"><div class="step-num">4</div>Tap the four corners of the A4 sheet: top-left, top-right, bottom-left, bottom-right. The app solves for your camera height automatically — no height guess needed.</div>
+    <div class="form-hint" style="display:block;margin-bottom:16px;line-height:1.5;">
+      Lay an A4 sheet flat on the footpath — landscape, shorter edge lined up along the footpath — then photograph it with all 4 corners visible.
     </div>
 
     <div class="modal-actions">
@@ -1471,18 +1374,29 @@ function applyZoom() {
     var zl = document.getElementById('zoom-label');
     if (zl && isZ) zl.textContent = Z.scale.toFixed(1)+'×';
   }
-  // At scale 1, hand vertical single-finger gestures back to the browser
-  // so the page scrolls normally when the finger starts over the photo.
-  // Once zoomed in, take full control so pan/pinch don't fight the page.
-  // Both the svg AND its wrapper (.vwrap) need this — an ancestor with
-  // touch-action:none overrides a descendant's more permissive value.
-  var ta = isZ ? 'none' : 'pan-y';
-  var svgEl = document.getElementById('svg');
-  if (svgEl) svgEl.style.touchAction = ta;
-  var vwrap = document.getElementById('vwrap');
-  if (vwrap) vwrap.style.touchAction = ta;
+  updateTouchAction();
   // Re-render UI elements so counter-scale (isc) reflects new zoom level
   if (S.imgLoaded) redraw();
+}
+// Touch-action is always 'none' on the photo area: 100% of pan/zoom is
+// handled by our own JS (see onPD/onPM pinch + pan logic), and the browser
+// is never given a chance to interpret any gesture natively. This used to
+// be conditional (permissive 'pan-y' at scale 1, so a plain swipe over the
+// photo could scroll the page) but that created a race: the very first
+// finger-down of a two-finger pinch is indistinguishable from a one-finger
+// pan until the second finger lands, so a pinch-to-zoom attempt starting
+// from scale 1 could get partially "claimed" by the browser as a native
+// scroll before our JS pinch handler ever ran. Locking this down
+// unconditionally means the screen never moves except via our own zoom
+// controls — swipe-to-scroll-the-page-over-the-photo is traded away in
+// favor of "zooming in during calibration never accidentally scrolls."
+// Both the svg AND its wrapper (.vwrap) need this — an ancestor with
+// touch-action:none overrides a descendant's more permissive value.
+function updateTouchAction() {
+  var svgEl = document.getElementById('svg');
+  if (svgEl) svgEl.style.touchAction = 'none';
+  var vwrap = document.getElementById('vwrap');
+  if (vwrap) vwrap.style.touchAction = 'none';
 }
 function resetZoom() { Z={scale:1,tx:0,ty:0}; applyZoom(); }
 function zoomBy(factor) {
@@ -1518,6 +1432,19 @@ function onPD(e) {
 
   var p = toContent(raw);
   S.startP = {x:p.x,y:p.y}; S.moved = false; S._t = Date.now();
+  var hr = 1/Z.scale; // scale hit radius with zoom
+
+  // Vanishing point stays draggable even during A4 mode — getting VP right
+  // matters just as much for the A4 solve as it does for normal measurement.
+  // This has to be checked before the A4-tap intercept below, otherwise
+  // every tap in A4 mode (including one landing on the VP handle) gets
+  // treated as placing a corner point, and the VP looks stuck.
+  if (Math.hypot(p.x-S.vp.x,p.y-S.vp.y) < 50*hr) {
+    S.drag = 'vp';
+    try { e.target.setPointerCapture(e.pointerId); } catch(ex) {}
+    S._lp = p; S._rawLp = raw;
+    return;
+  }
 
   // A4 calibration mode — don't place the point yet. If a second finger
   // lands right after (pinch-zoom to see the corner better), _multiTouch
@@ -1530,12 +1457,10 @@ function onPD(e) {
   }
   var wXz=lineX(S.wBx,S.wZY), kXm=lineX(S.kBx,S.kMY);
   var p0=exitPoint(S.wBx), p1=exitPoint(S.kBx);
-  var hr = 1/Z.scale; // scale hit radius with zoom
 
   var pXz = S.pActive ? lineX(S.pBx, S.pZY) : -9999;
   var pExit = S.pActive ? exitPoint(S.pBx) : {x:-9999,y:-9999};
-  if     (Math.hypot(p.x-S.vp.x,p.y-S.vp.y) < 50*hr)                      S.drag='vp';
-  else if(Math.hypot(p.x-wXz,   p.y-S.wZY)   < 70*hr)                      S.drag='w';
+  if     (Math.hypot(p.x-wXz,   p.y-S.wZY)   < 70*hr)                      S.drag='w';
   else if(Math.hypot(p.x-kXm,   p.y-S.kMY)   < 70*hr)                      S.drag='k';
   else if(S.pActive && Math.hypot(p.x-pXz,   p.y-S.pZY)   < 70*hr)         S.drag='p';
   else if(S.wLocked && Math.hypot(p.x-p0.x,  p.y-p0.y)    < 40*hr)         S.drag='w';
@@ -2253,11 +2178,17 @@ function resetForNext() {
 
 // ─── CALIBRATION ───────────────────────────────────────────────────────────────
 function openCalModal() {
-  document.getElementById('cal-phone-lbl').textContent = U.model;
-  document.getElementById('cal-scale-lbl').textContent = (S.cal.method1||1).toFixed(3)+'× (Method 1)  /  '+(S.cal.method2||1).toFixed(3)+'× (Method 2)';
-  document.getElementById('cal-eyeh-lbl').textContent  = (S.eyeH||U.eyeH||1200)+' mm';
-  document.getElementById('cal-eyeh-input').value      = S.eyeH||U.eyeH||1200;
-  document.getElementById('cal-height-input').value    = U.heightCM || '';
+  // A locked vanishing point or locked building/kerb edge (a tap toggles the
+  // lock — see onPU) silently carries over from a previous photo/session.
+  // If it's still locked when you try to recalibrate, you can't reposition
+  // it to match the new photo, so the "recalibration" just reuses stale
+  // geometry — which looks exactly like calibration refusing to override.
+  // Unlocking here means every calibration attempt starts fully adjustable.
+  S.vp.locked = false;
+  S.wLocked = false; S.wLockedExit = null; S.wLockedBx = null; S.wLockedZY = null;
+  S.kLocked = false; S.kLockedExit = null; S.kLockedBx = null; S.kLockedMY = null;
+  if (S.imgLoaded) redraw();
+
   document.getElementById('cal-ref-input').value       = '';
   document.getElementById('cal-method1-panel').style.display = 'none';
   document.getElementById('cal-modal').style.display   = 'flex';
@@ -2267,17 +2198,12 @@ function closeCalModal(e) {
     document.getElementById('cal-modal').style.display='none';
 }
 function doCalibrate() {
-  var newEyeH = applyEyeHFromInput();
-  var refMM   = parseFloat(document.getElementById('cal-ref-input').value);
+  if (!S.imgLoaded) { showToast('Load image & position lines first','error'); return; }
+  var refMM = parseFloat(document.getElementById('cal-ref-input').value);
+  if (!refMM) { showToast('Enter the footpath width','error'); return; }
 
-  if(refMM){
-    if(!S.imgLoaded){
-      showToast('Load image & position lines first','error');
-      return;
-    }
-    var raw=widthMMRaw();
-    if(raw>0) S.scaleFactor=refMM/raw;
-  }
+  var raw = widthMMRaw();
+  if (raw > 0) S.scaleFactor = refMM / raw;
 
   S.cal.method1 = S.scaleFactor;
   localStorage.setItem(calKey(), JSON.stringify({
@@ -2287,7 +2213,7 @@ function doCalibrate() {
   closeCalModal();
   showToast('Method 1 calibration saved for '+U.model,'success');
   document.getElementById('cal-nudge').style.display='none';
-  if (refMM) logCalibrationToSheet('Tape Measure', { method1_calibration: S.cal.method1 });
+  logCalibrationToSheet('Tape Measure', { method1_calibration: S.cal.method1 });
 }
 function resetCal() {
   if(!confirm('Reset calibration for '+U.model+'? This clears both Method 1 and Method 2 values saved on this device.')) return;
@@ -2310,27 +2236,6 @@ function updateCalBadge() {
 // adult. This just gives a starting point — Method 1 or Method 2 calibration
 // still does the real correction afterward.
 var CAMERA_HEIGHT_RATIO = 0.70;
-function estimateEyeHFromHeight() {
-  var heightCM = parseFloat(document.getElementById('cal-height-input').value);
-  if (!heightCM || heightCM < 100 || heightCM > 230) {
-    showToast('Enter your height in cm, e.g. 170','error');
-    return;
-  }
-  var estMM = Math.round(heightCM * 10 * CAMERA_HEIGHT_RATIO);
-  document.getElementById('cal-eyeh-input').value = estMM;
-  U.heightCM = heightCM;
-  localStorage.setItem('fp_user', JSON.stringify(U));
-  showToast('Estimated ~' + estMM + 'mm — still fine-tune with a calibration below','info');
-}
-// Reads the Camera Height field and applies it to the live model — shared by
-// both doCalibrate() (Method 1) and confirmA4() (Method 2) so eyeH is always
-// in effect before either method computes its scaleFactor.
-function applyEyeHFromInput() {
-  var el = document.getElementById('cal-eyeh-input');
-  var v = parseInt(el && el.value) || S.eyeH || 1200;
-  S.eyeH = v;
-  return v;
-}
 // Toggles which calibration method's fields are shown. 0 = collapse back to
 // the chooser, 1 = reveal the known-width fields inline, 2 = hand off to the
 // A4 instructions modal (which itself leads into startA4Mode()).
@@ -2340,7 +2245,6 @@ function chooseCalMethod(n) {
     panel1.style.display = 'block';
   } else if (n === 2) {
     panel1.style.display = 'none';
-    applyEyeHFromInput();
     closeCalModal();
     document.getElementById('a4-instructions-modal').style.display = 'flex';
   } else {
@@ -2355,18 +2259,19 @@ function chooseCalMethod(n) {
 // simultaneously. Eliminates the need to estimate camera height.
 function startA4Mode() {
   if (!S.imgLoaded) { showToast('Load a photo first','error'); return; }
-  applyEyeHFromInput();
   closeCalModal();
   S.aMode = true;
   S.aPts = [];
   document.getElementById('a4-panel').style.display = 'block';
   updateA4Panel();
+  updateTouchAction();
   redraw();
 }
 function cancelA4Mode() {
   S.aMode = false;
   S.aPts = [];
   document.getElementById('a4-panel').style.display = 'none';
+  updateTouchAction();
   redraw();
 }
 function placeA4Point(p) {
@@ -2375,6 +2280,13 @@ function placeA4Point(p) {
   } else {
     S.aPts = [{ x:p.x, y:p.y }]; // fifth tap restarts
   }
+  updateA4Panel();
+  redraw();
+}
+// Discards the 4 tapped corners and goes back to tapping from scratch,
+// without leaving A4 mode — used by the "Retake" button below.
+function restartA4Points() {
+  S.aPts = [];
   updateA4Panel();
   redraw();
 }
@@ -2395,12 +2307,16 @@ function updateA4Panel() {
     txt.textContent = 'Tap the bottom-right corner.';
     choices.style.display = 'none';
   } else {
-    txt.textContent = 'All four corners marked — calibrating…';
-    choices.style.display = 'none';
-    // Auto-calibrate after a short delay
-    setTimeout(function() {
-      solveA4Calibration();
-    }, 300);
+    // All 4 corners marked — ask for confirmation rather than calibrating
+    // immediately, so a mis-tap can be retaken instead of the panel just
+    // vanishing on you.
+    txt.textContent = 'All four corners marked.';
+    choices.style.display = 'block';
+    choices.innerHTML =
+      '<div style="display:flex;gap:8px;margin-bottom:8px;">'
+      + '<button onclick="restartA4Points()" style="flex:1;background:transparent;border:1px solid rgba(255,255,255,0.2);color:#94a3b8;border-radius:8px;padding:9px;font-size:12px;cursor:pointer;font-family:inherit;">Retake</button>'
+      + '<button onclick="solveA4Calibration()" style="flex:1;background:#e879f9;border:none;color:#1a0e22;border-radius:8px;padding:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">Confirm</button>'
+      + '</div>';
   }
 }
 
@@ -2474,24 +2390,41 @@ function solveA4Calibration() {
     var sf_bot = 297 / raw_h_bot;
     S.scaleFactor = (sf_top + sf_bot) / 2;
 
-    // Update the calibration modal's eyeH field so user sees the solved value
-    document.getElementById('cal-eyeh-input').value = S.eyeH;
-
     S.cal.method2 = S.scaleFactor;
     localStorage.setItem(calKey(), JSON.stringify({
       method1_calibration: S.cal.method1, method2_scale_factor: S.cal.method2
     }));
     applyCalMethod('method2'); // show this method's result immediately
-    cancelA4Mode();
-
-    var msg = 'Calibrated from A4 sheet ✓ (Solved camera height: ' + S.eyeH + 'mm)';
-    showToast(msg, 'success');
     document.getElementById('cal-nudge').style.display = 'none';
     logCalibrationToSheet('A4 Sheet', { method2_scale_factor: S.cal.method2 });
+
+    // Show the result and ask whether to try measurement now, rather than
+    // just closing the panel — a mis-tap giving a clearly-wrong scale factor
+    // is easy to spot here, and hard to notice after the panel has vanished.
+    var txt = document.getElementById('a4-panel-text');
+    var choices = document.getElementById('a4-panel-choices');
+    txt.textContent = 'Calibrated ✓ — Scale factor: ' + S.scaleFactor.toFixed(3) + '×';
+    choices.style.display = 'block';
+    choices.innerHTML =
+      '<div style="display:flex;gap:8px;margin-bottom:8px;">'
+      + '<button onclick="finishA4Calibration(false)" style="flex:1;background:transparent;border:1px solid rgba(255,255,255,0.2);color:#94a3b8;border-radius:8px;padding:9px;font-size:12px;cursor:pointer;font-family:inherit;">Not now</button>'
+      + '<button onclick="finishA4Calibration(true)" style="flex:1;background:#e879f9;border:none;color:#1a0e22;border-radius:8px;padding:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">Try Measurement →</button>'
+      + '</div>';
+    document.getElementById('a4-cancel-btn').style.display = 'none';
   } catch(err) {
     console.error('A4 calibration error:', err);
     showToast('Calibration failed: ' + err.message, 'error');
     cancelA4Mode();
+  }
+}
+// Closes out of A4 mode after the result step above. tryMeasurement just
+// controls whether a helpful nudge toast appears — either way, this returns
+// to the same main screen where the building/kerb edges are adjusted.
+function finishA4Calibration(tryMeasurement) {
+  document.getElementById('a4-cancel-btn').style.display = 'block';
+  cancelA4Mode();
+  if (tryMeasurement) {
+    showToast('Now position the Building edge and Kerb edge lines to measure the footpath','info');
   }
 }
 
