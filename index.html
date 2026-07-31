@@ -557,7 +557,15 @@ td.hi{color:white;font-weight:700;}
     <div style="margin-top:2px;padding:10px 0 0;border-top:1px solid var(--border);">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
         <span class="flbl">Focal point</span>
-        <div class="cal-badge" id="cal-badge" onclick="openCalModal()">Scale: 1.00×</div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <select id="cal-method-select" onchange="onCalMethodChange()"
+            style="background:var(--surface);border:1px solid var(--border);border-radius:8px;
+            color:var(--text);font-size:11px;padding:4px 6px;font-family:inherit;">
+            <option value="method2">Method 2 (A4)</option>
+            <option value="method1">Method 1 (Manual)</option>
+          </select>
+          <div class="cal-badge" id="cal-badge" onclick="openCalModal()">Scale: 1.00×</div>
+        </div>
       </div>
       <div class="ftr-r2">
         <div style="display:grid;grid-template-columns:repeat(3,36px);grid-template-rows:repeat(3,36px);gap:4px;">
@@ -933,6 +941,7 @@ var S = {
   // Property line (building offset) — activated by tapping corner knob
   pActive:false, pBx:0, pZY:0, pLocked:false, pLockedExit:null, pLockedBx:null, pLockedZY:null,
   eyeH:1200, scaleFactor:1.0, focal:0,
+  cal:{method1:null, method2:null}, calMethod:'method2',
   drag:null, _lp:{x:0,y:0}, startP:{x:0,y:0}, moved:false,
   // A4-sheet calibration mode (Method 2) — two tapped points on the sheet's edges
   aMode:false, aPts:[],
@@ -1188,16 +1197,18 @@ function startMain() {
 
   // Eye height always comes from this person's height (see doLogin) — it's
   // never looked up or shared, since how high someone holds a phone is a
-  // personal habit, not a phone property. Only scaleFactor is looked up
-  // below, keyed on email+model together.
+  // personal habit, not a phone property.
   S.eyeH = U.eyeH || 1200;
 
-  var cal = JSON.parse(localStorage.getItem(calKey()) || '{}');
-  S.scaleFactor = cal.scaleFactor || 1.0;
-  updateCalBadge();
+  // Both methods' scale factors are tracked side by side so the dropdown
+  // can switch between them — S.cal.method1 / S.cal.method2. S.calMethod is
+  // whichever one is currently driving S.scaleFactor for live measurement.
+  var cached = JSON.parse(localStorage.getItem(calKey()) || '{}');
+  S.cal = { method1: cached.method1_calibration || null, method2: cached.method2_scale_factor || null };
+  applyCalMethod('method2'); // default, per the dropdown's default option
 
-  // Show first-use calibration nudge
-  var isFirstUse = !localStorage.getItem(calKey());
+  // Show first-use calibration nudge — only if neither method has ever run
+  var isFirstUse = !S.cal.method1 && !S.cal.method2;
   var nudge = document.getElementById("cal-nudge");
   nudge.style.display = isFirstUse ? "block" : "none";
   if (isFirstUse) document.getElementById("nudge-model").textContent = U.model;
@@ -1206,10 +1217,10 @@ function startMain() {
   document.getElementById('setup-banner').style.display =
     (!APPS_SCRIPT_URL) ? 'block' : 'none';
 
-  // Pull the shared scaleFactor for this (email, phone model) pair from the
-  // Calibrations sheet — one row per person+phone, kept unique by an upsert
-  // on the Apps Script side. Lets the same person resume on a second device
-  // without recalibrating, without mixing their scaleFactor into anyone else's.
+  // Pull both methods' shared values for this (email, phone model) pair from
+  // the Calibrations sheet — one row per person+phone, kept unique by an
+  // upsert on the Apps Script side. Lets the same person resume on a second
+  // device without recalibrating, without mixing their values into anyone else's.
   syncCalibrationFromServer();
 
   // Geolocation
@@ -1223,26 +1234,41 @@ function calKey() {
   return 'fp_cal_' + (U.email || '').trim().toLowerCase() + '|' + (U.model || '').trim().toLowerCase();
 }
 
+// Switches which method's scale factor drives live measurement, updates the
+// dropdown to match, and redraws so the person can compare methods on the
+// same photo/edges without recalibrating anything.
+function applyCalMethod(which) {
+  S.calMethod = which;
+  S.scaleFactor = S.cal[which] || 1.0;
+  var sel = document.getElementById('cal-method-select');
+  if (sel) sel.value = which;
+  updateCalBadge();
+  if (S.imgLoaded) redraw();
+  document.getElementById('btn-cal-hdr').classList.toggle('active', S.scaleFactor !== 1.0);
+}
+function onCalMethodChange() {
+  applyCalMethod(document.getElementById('cal-method-select').value);
+}
+
 // Best-effort fetch of the shared calibration for this (email, model) pair.
-// Prefers the A4 method's scale factor (method2_scale_factor) since it's the
-// more precise, current method; falls back to the manual-edges method
-// (method1_calibration) if that's the only one on record for this person+phone.
-// Silent no-op on failure, missing URL, or no row yet.
+// Pulls both method1_calibration and method2_scale_factor (either may be
+// absent if that method hasn't been used for this person+phone) so the
+// dropdown always reflects the latest sheet values for whichever method is
+// currently selected. Silent no-op on failure, missing URL, or no row yet.
 function syncCalibrationFromServer() {
   if (!APPS_SCRIPT_URL) return;
   postToScript({ action: 'getCalibration', email: U.email, model: U.model })
     .then(function(res) {
       if (!res || !res.calibration) return;
-      var sf = res.calibration.method2_scale_factor || res.calibration.method1_calibration;
-      if (!sf) return;
+      var c = res.calibration;
+      S.cal.method1 = c.method1_calibration || S.cal.method1;
+      S.cal.method2 = c.method2_scale_factor || S.cal.method2;
+      localStorage.setItem(calKey(), JSON.stringify({
+        method1_calibration: S.cal.method1, method2_scale_factor: S.cal.method2
+      }));
 
-      S.scaleFactor = sf;
-      localStorage.setItem(calKey(), JSON.stringify({ scaleFactor: S.scaleFactor }));
-
-      updateCalBadge();
-      if (S.imgLoaded) redraw();
-      document.getElementById('cal-nudge').style.display = 'none';
-      document.getElementById('btn-cal-hdr').classList.toggle('active', S.scaleFactor !== 1.0);
+      applyCalMethod(S.calMethod); // refresh in case the selected method's value just arrived
+      if (S.cal.method1 || S.cal.method2) document.getElementById('cal-nudge').style.display = 'none';
     })
     .catch(function(){});
 }
@@ -2227,9 +2253,8 @@ function resetForNext() {
 
 // ─── CALIBRATION ───────────────────────────────────────────────────────────────
 function openCalModal() {
-  var cal=JSON.parse(localStorage.getItem(calKey())||'{}');
   document.getElementById('cal-phone-lbl').textContent = U.model;
-  document.getElementById('cal-scale-lbl').textContent = (cal.scaleFactor||1).toFixed(3)+'×';
+  document.getElementById('cal-scale-lbl').textContent = (S.cal.method1||1).toFixed(3)+'× (Method 1)  /  '+(S.cal.method2||1).toFixed(3)+'× (Method 2)';
   document.getElementById('cal-eyeh-lbl').textContent  = (S.eyeH||U.eyeH||1200)+' mm';
   document.getElementById('cal-eyeh-input').value      = S.eyeH||U.eyeH||1200;
   document.getElementById('cal-height-input').value    = U.heightCM || '';
@@ -2254,26 +2279,23 @@ function doCalibrate() {
     if(raw>0) S.scaleFactor=refMM/raw;
   }
 
-  var cal={scaleFactor:S.scaleFactor};
-  localStorage.setItem(calKey(),JSON.stringify(cal));
-  updateCalBadge();
-  if(S.imgLoaded) redraw();
+  S.cal.method1 = S.scaleFactor;
+  localStorage.setItem(calKey(), JSON.stringify({
+    method1_calibration: S.cal.method1, method2_scale_factor: S.cal.method2
+  }));
+  applyCalMethod('method1'); // show this method's result immediately
   closeCalModal();
-  showToast('Calibration saved for '+U.model,'success');
+  showToast('Method 1 calibration saved for '+U.model,'success');
   document.getElementById('cal-nudge').style.display='none';
-  document.getElementById('btn-cal-hdr').classList.toggle('active', S.scaleFactor!==1.0);
-  if (refMM) logCalibrationToSheet('Tape Measure', { method1_calibration: S.scaleFactor });
+  if (refMM) logCalibrationToSheet('Tape Measure', { method1_calibration: S.cal.method1 });
 }
 function resetCal() {
-  if(!confirm('Reset calibration for '+U.model+'?')) return;
-  S.scaleFactor=1.0;
-  S.eyeH=U.eyeH||1200;
+  if(!confirm('Reset calibration for '+U.model+'? This clears both Method 1 and Method 2 values saved on this device.')) return;
+  S.cal = { method1: null, method2: null };
   localStorage.removeItem(calKey());
-  updateCalBadge();
-  if(S.imgLoaded) redraw();
+  applyCalMethod(S.calMethod);
   closeCalModal();
   showToast('Calibration reset','info');
-  document.getElementById('btn-cal-hdr').classList.remove('active');
 }
 function updateCalBadge() {
   var el=document.getElementById('cal-badge');
@@ -2455,17 +2477,17 @@ function solveA4Calibration() {
     // Update the calibration modal's eyeH field so user sees the solved value
     document.getElementById('cal-eyeh-input').value = S.eyeH;
 
-    var cal = { scaleFactor:S.scaleFactor };
-    localStorage.setItem(calKey(), JSON.stringify(cal));
-    updateCalBadge();
-    redraw();
+    S.cal.method2 = S.scaleFactor;
+    localStorage.setItem(calKey(), JSON.stringify({
+      method1_calibration: S.cal.method1, method2_scale_factor: S.cal.method2
+    }));
+    applyCalMethod('method2'); // show this method's result immediately
     cancelA4Mode();
 
     var msg = 'Calibrated from A4 sheet ✓ (Solved camera height: ' + S.eyeH + 'mm)';
     showToast(msg, 'success');
     document.getElementById('cal-nudge').style.display = 'none';
-    document.getElementById('btn-cal-hdr').classList.toggle('active', S.scaleFactor !== 1.0);
-    logCalibrationToSheet('A4 Sheet', { method2_scale_factor: S.scaleFactor });
+    logCalibrationToSheet('A4 Sheet', { method2_scale_factor: S.cal.method2 });
   } catch(err) {
     console.error('A4 calibration error:', err);
     showToast('Calibration failed: ' + err.message, 'error');
