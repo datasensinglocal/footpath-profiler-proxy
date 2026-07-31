@@ -496,14 +496,16 @@ td.hi{color:white;font-weight:700;}
       </div>
       <div class="side-tag"><span id="side-lbl">R</span></div>
     </div>
+  </div>
 
-    <!-- A4-sheet calibration panel (Method 2) — shown only while marking -->
-    <div id="a4-panel" style="display:none;position:absolute;bottom:10px;left:10px;right:10px;pointer-events:auto;z-index:6;">
-      <div style="background:rgba(12,18,32,0.92);backdrop-filter:blur(8px);border:1px solid rgba(232,121,249,0.4);border-radius:12px;padding:12px 14px;">
-        <div id="a4-panel-text" style="font-size:12px;color:#f0f4f8;margin-bottom:10px;line-height:1.4;">Tap the top-left corner of the A4 sheet.</div>
-        <div id="a4-panel-choices" style="display:none;"></div>
-        <button onclick="cancelA4Mode()" id="a4-cancel-btn" style="width:100%;background:transparent;border:1px solid rgba(255,255,255,0.15);color:#94a3b8;border-radius:8px;padding:7px;font-size:11px;cursor:pointer;touch-action:manipulation;font-family:inherit;">Cancel</button>
-      </div>
+  <!-- A4-sheet calibration panel (Method 2) — shown only while marking.
+       Sits below the photo (not overlaid on it) so it never hides the
+       corners you're trying to tap. -->
+  <div id="a4-panel" style="display:none;margin:8px 18px 0;">
+    <div style="background:rgba(12,18,32,0.92);backdrop-filter:blur(8px);border:1px solid rgba(232,121,249,0.4);border-radius:12px;padding:12px 14px;">
+      <div id="a4-panel-text" style="font-size:12px;color:#f0f4f8;margin-bottom:10px;line-height:1.4;">Tap the top-left corner of the A4 sheet.</div>
+      <div id="a4-panel-choices" style="display:none;"></div>
+      <button onclick="cancelA4Mode()" id="a4-cancel-btn" style="width:100%;background:transparent;border:1px solid rgba(255,255,255,0.15);color:#94a3b8;border-radius:8px;padding:7px;font-size:11px;cursor:pointer;touch-action:manipulation;font-family:inherit;">Cancel</button>
     </div>
   </div>
   <p class="hint" id="hint" style="display:none;">👆 tap a knob to lock it · drag to move</p>
@@ -1785,22 +1787,32 @@ function redraw() {
     if (obadge2) obadge2.style.display = 'none';
   }
 
-  // ── A4 calibration points (Method 2) — sequential tapping 1→2→3→4 ──
+  // ── A4 calibration points (Method 2) ──
+  // Tapped in order 1=top-left, 2=top-right, 3=bottom-left, 4=bottom-right —
+  // but the rectangle's actual perimeter visits them as 1→2→4→3, not 1→2→3→4.
+  // Connecting strictly by tap order would draw corner 2 to corner 3 as a
+  // diagonal straight across the sheet instead of down its side edge, which
+  // is confusing and makes a mis-tapped corner hard to spot. PERIM below is
+  // the index order that traces the actual rectangle edges.
   if (S.aMode && S.aPts.length) {
-    if (S.aPts.length === 4) {
-      // All 4 points placed: draw filled rectangle with solid outline
-      var pts = S.aPts;
-      var polyPath = 'M '+pts[0].x.toFixed(1)+','+pts[0].y.toFixed(1)
-                   + ' L '+pts[1].x.toFixed(1)+','+pts[1].y.toFixed(1)
-                   + ' L '+pts[2].x.toFixed(1)+','+pts[2].y.toFixed(1)
-                   + ' L '+pts[3].x.toFixed(1)+','+pts[3].y.toFixed(1)
+    var PERIM = [0,1,3,2];
+    var haveAll4 = S.aPts.length === 4;
+    if (haveAll4) {
+      var polyPath = 'M '+S.aPts[PERIM[0]].x.toFixed(1)+','+S.aPts[PERIM[0]].y.toFixed(1)
+                   + ' L '+S.aPts[PERIM[1]].x.toFixed(1)+','+S.aPts[PERIM[1]].y.toFixed(1)
+                   + ' L '+S.aPts[PERIM[2]].x.toFixed(1)+','+S.aPts[PERIM[2]].y.toFixed(1)
+                   + ' L '+S.aPts[PERIM[3]].x.toFixed(1)+','+S.aPts[PERIM[3]].y.toFixed(1)
                    + ' Z';
       u+='<path d="'+polyPath+'" fill="#e879f9" fill-opacity="0.2" stroke="#e879f9" stroke-width="3" stroke-dasharray="none"/>';
     } else {
-      // Draw connecting lines as user taps sequentially (dashed)
-      for (var i = 0; i < S.aPts.length - 1; i++) {
-        u+='<line x1="'+S.aPts[i].x.toFixed(1)+'" y1="'+S.aPts[i].y.toFixed(1)+'" x2="'+S.aPts[i+1].x.toFixed(1)+'" y2="'+S.aPts[i+1].y.toFixed(1)
-          +'" stroke="#e879f9" stroke-width="2.5" stroke-dasharray="4,3" opacity="0.8"/>';
+      // Draw whichever perimeter edges are fully known so far (both of that
+      // edge's corners already tapped), instead of connecting raw tap order.
+      for (var pi = 0; pi < 4; pi++) {
+        var a = PERIM[pi], b = PERIM[(pi+1)%4];
+        if (S.aPts[a] && S.aPts[b]) {
+          u+='<line x1="'+S.aPts[a].x.toFixed(1)+'" y1="'+S.aPts[a].y.toFixed(1)+'" x2="'+S.aPts[b].x.toFixed(1)+'" y2="'+S.aPts[b].y.toFixed(1)
+            +'" stroke="#e879f9" stroke-width="2.5" stroke-dasharray="4,3" opacity="0.8"/>';
+        }
       }
     }
     // Draw numbered circles at each tap point
