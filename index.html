@@ -355,52 +355,16 @@ td.hi{color:white;font-weight:700;}
       <span class="form-hint">Camera height is estimated as your height minus 15cm — recomputed fresh each login, not something you'll need to touch again in Calibrate</span>
     </div>
 
-    <div class="form-group">
+    <div class="form-group" style="position:relative;">
       <label class="form-label">Phone Model</label>
-      <select class="form-select" id="l-model" onchange="modelChanged()">
-        <option value="">Select model…</option>
-        <option>iPhone 13</option>
-        <option>iPhone 14</option>
-        <option>iPhone 14 Pro</option>
-        <option>iPhone 15</option>
-        <option>iPhone 15 Pro</option>
-        <option>Samsung Galaxy S23</option>
-        <option>Samsung Galaxy S24</option>
-        <option>OnePlus 11</option>
-        <option>OnePlus 12</option>
-        <option>Pixel 7</option>
-        <option>Pixel 8</option>
-        <option>Redmi Note 13</option>
-        <option>iPhone 16</option>
-        <option>iPhone 16 Pro</option>
-        <option>Samsung Galaxy S25</option>
-        <option>OnePlus 13</option>
-        <option>Pixel 9</option>
-        <option>Redmi Note 13 Pro</option>
-        <option>Redmi Note 12</option>
-        <option>Poco X6</option>
-        <option>Poco F5</option>
-        <option>Realme 12 Pro</option>
-        <option>Vivo V30</option>
-        <option>iQOO Neo 9</option>
-        <option>Nothing Phone (1)</option>
-        <option>Nothing Phone (2)</option>
-        <option>Nothing Phone (2a)</option>
-        <option>Nothing Phone (2a) Special Edition</option>
-        <option>Nothing Phone (2a) Plus</option>
-        <option>Nothing Phone (3)</option>
-        <option>Nothing Phone (3a)</option>
-        <option>Nothing Phone (3a) Lite</option>
-        <option>Nothing Phone (3a) Pro</option>
-        <option>Nothing Phone (4a)</option>
-        <option>Nothing Phone (4a) Pro</option>
-        <option>Nothing Phone (4b)</option>
-        <option>CMF Phone 1</option>
-        <option>CMF Phone 2 Pro</option>
-        <option value="custom">Other (type below)</option>
-      </select>
-      <input class="form-input" id="l-model-custom" type="text"
-             placeholder="Enter your phone model" style="display:none;margin-top:8px;">
+      <input class="form-input" id="l-model" type="text" autocomplete="off"
+             placeholder="Start typing… e.g. Redmi Note 13"
+             oninput="onModelInput()" onfocus="onModelInput()"
+             onblur="setTimeout(hideModelSuggestions,150)">
+      <div id="l-model-suggestions" style="display:none;position:absolute;left:0;right:0;top:100%;
+           margin-top:4px;background:var(--surface);border:1px solid var(--border);
+           border-radius:8px;max-height:220px;overflow-y:auto;z-index:20;
+           box-shadow:0 8px 24px rgba(0,0,0,0.35);"></div>
     </div>
 
     <button class="btn-primary" onclick="doLogin()">Start Surveying →</button>
@@ -1029,9 +993,209 @@ var S = {
 };
 
 // ─── LOGIN ─────────────────────────────────────────────────────────────────────
-function modelChanged() {
-  var sel = document.getElementById('l-model').value;
-  document.getElementById('l-model-custom').style.display = sel==='custom' ? 'block' : 'none';
+
+// ─── PHONE MODEL AUTOCOMPLETE ──────────────────────────────────────────────────
+// Seed list: common phone models sold in India, grouped loosely by brand.
+// Not exhaustive by design — anything a surveyor actually types gets added
+// to fp_custom_models permanently (see saveCustomModel), so the effective
+// list grows to match real field devices over time instead of us trying to
+// hand-maintain an exhaustive catalog upfront.
+var SEED_MODELS = [
+  // Apple — back to iPhone 6 (~2014)
+  'iPhone 6','iPhone 6 Plus','iPhone 6s','iPhone 6s Plus',
+  'iPhone SE (2016)','iPhone 7','iPhone 7 Plus','iPhone 8','iPhone 8 Plus',
+  'iPhone X','iPhone XR','iPhone XS','iPhone XS Max',
+  'iPhone SE (2020)','iPhone SE (2022)',
+  'iPhone 11','iPhone 11 Pro','iPhone 11 Pro Max',
+  'iPhone 12','iPhone 12 Mini','iPhone 12 Pro','iPhone 12 Pro Max',
+  'iPhone 13','iPhone 13 Mini','iPhone 13 Pro','iPhone 13 Pro Max',
+  'iPhone 14','iPhone 14 Plus','iPhone 14 Pro','iPhone 14 Pro Max',
+  'iPhone 15','iPhone 15 Plus','iPhone 15 Pro','iPhone 15 Pro Max',
+  'iPhone 16','iPhone 16 Plus','iPhone 16 Pro','iPhone 16 Pro Max','iPhone 16e',
+  'iPhone 17','iPhone 17 Pro','iPhone 17 Pro Max','iPhone 17 Air',
+  // Samsung Galaxy S — back to S6 (2015)
+  'Samsung Galaxy S6','Samsung Galaxy S6 Edge','Samsung Galaxy S7','Samsung Galaxy S7 Edge',
+  'Samsung Galaxy S8','Samsung Galaxy S8+','Samsung Galaxy S9','Samsung Galaxy S9+',
+  'Samsung Galaxy S10e','Samsung Galaxy S10','Samsung Galaxy S10+','Samsung Galaxy S10 Lite',
+  'Samsung Galaxy S20','Samsung Galaxy S20+','Samsung Galaxy S20 Ultra','Samsung Galaxy S20 FE',
+  'Samsung Galaxy S21','Samsung Galaxy S21+','Samsung Galaxy S21 Ultra','Samsung Galaxy S21 FE',
+  'Samsung Galaxy S22','Samsung Galaxy S22+','Samsung Galaxy S22 Ultra',
+  'Samsung Galaxy S23','Samsung Galaxy S23+','Samsung Galaxy S23 Ultra','Samsung Galaxy S23 FE',
+  'Samsung Galaxy S24','Samsung Galaxy S24+','Samsung Galaxy S24 Ultra','Samsung Galaxy S24 FE',
+  'Samsung Galaxy S25','Samsung Galaxy S25+','Samsung Galaxy S25 Ultra','Samsung Galaxy S25 Edge',
+  // Samsung Galaxy Note (discontinued line, still common in the field)
+  'Samsung Galaxy Note 4','Samsung Galaxy Note 5','Samsung Galaxy Note 8',
+  'Samsung Galaxy Note 9','Samsung Galaxy Note 10','Samsung Galaxy Note 10+',
+  'Samsung Galaxy Note 20','Samsung Galaxy Note 20 Ultra',
+  // Samsung foldables
+  'Samsung Galaxy Fold','Samsung Galaxy Z Fold2','Samsung Galaxy Z Fold3','Samsung Galaxy Z Fold4',
+  'Samsung Galaxy Z Fold5','Samsung Galaxy Z Fold6',
+  'Samsung Galaxy Z Flip','Samsung Galaxy Z Flip3','Samsung Galaxy Z Flip4',
+  'Samsung Galaxy Z Flip5','Samsung Galaxy Z Flip6',
+  // Samsung Galaxy A/J/M/F — budget/midrange, common older field devices
+  'Samsung Galaxy J2','Samsung Galaxy J5','Samsung Galaxy J7','Samsung Galaxy J7 Prime',
+  'Samsung Galaxy A5 (2017)','Samsung Galaxy A7 (2018)',
+  'Samsung Galaxy A10','Samsung Galaxy A20','Samsung Galaxy A30','Samsung Galaxy A50','Samsung Galaxy A70',
+  'Samsung Galaxy A21s','Samsung Galaxy A31','Samsung Galaxy A51','Samsung Galaxy A71',
+  'Samsung Galaxy A12','Samsung Galaxy A22','Samsung Galaxy A32','Samsung Galaxy A52','Samsung Galaxy A72',
+  'Samsung Galaxy A13','Samsung Galaxy A23','Samsung Galaxy A33','Samsung Galaxy A53','Samsung Galaxy A73',
+  'Samsung Galaxy A14','Samsung Galaxy A24','Samsung Galaxy A15','Samsung Galaxy A16',
+  'Samsung Galaxy A25','Samsung Galaxy A26','Samsung Galaxy A34','Samsung Galaxy A35',
+  'Samsung Galaxy A54','Samsung Galaxy A55','Samsung Galaxy A56',
+  'Samsung Galaxy M10','Samsung Galaxy M20','Samsung Galaxy M30','Samsung Galaxy M31','Samsung Galaxy M51',
+  'Samsung Galaxy M15','Samsung Galaxy M16','Samsung Galaxy M34','Samsung Galaxy M35',
+  'Samsung Galaxy F14','Samsung Galaxy F15',
+  // Google (Nexus + Pixel, back to ~2015)
+  'Nexus 5X','Nexus 6P','Pixel','Pixel XL','Pixel 2','Pixel 2 XL','Pixel 3','Pixel 3 XL',
+  'Pixel 3a','Pixel 3a XL','Pixel 4','Pixel 4 XL','Pixel 4a','Pixel 5','Pixel 5a',
+  'Pixel 6','Pixel 6 Pro','Pixel 6a',
+  'Pixel 7','Pixel 7 Pro','Pixel 7a','Pixel 8','Pixel 8 Pro','Pixel 8a',
+  'Pixel 9','Pixel 9 Pro','Pixel 9 Pro XL','Pixel 9a',
+  // OnePlus — back to the original 2014 One
+  'OnePlus One','OnePlus 2','OnePlus X','OnePlus 3','OnePlus 3T','OnePlus 5','OnePlus 5T',
+  'OnePlus 6','OnePlus 6T','OnePlus 7','OnePlus 7 Pro','OnePlus 7T','OnePlus 7T Pro',
+  'OnePlus 8','OnePlus 8 Pro','OnePlus 8T','OnePlus 9','OnePlus 9 Pro','OnePlus 9R',
+  'OnePlus 10R','OnePlus 10 Pro','OnePlus 11','OnePlus 11R','OnePlus 12','OnePlus 12R',
+  'OnePlus 13','OnePlus 13R',
+  'OnePlus Nord','OnePlus Nord 2','OnePlus Nord 3','OnePlus Nord 4',
+  'OnePlus Nord CE','OnePlus Nord CE 2','OnePlus Nord CE3 Lite','OnePlus Nord CE4',
+  // Xiaomi / Redmi / Poco — back to the original Redmi 1S / Mi 3 era
+  'Mi 3','Mi 4','Redmi 1S','Redmi 2','Redmi Note 3','Redmi Note 4','Redmi Note 5',
+  'Redmi Note 5 Pro','Redmi Note 6 Pro','Redmi Note 7','Redmi Note 7 Pro','Redmi Note 7S',
+  'Redmi Note 8','Redmi Note 8 Pro','Redmi Note 9','Redmi Note 9 Pro','Redmi Note 9 Pro Max',
+  'Redmi Note 10','Redmi Note 10 Pro','Redmi Note 10S','Redmi Note 11','Redmi Note 11 Pro',
+  'Redmi Note 12','Redmi Note 12 Pro','Redmi Note 13','Redmi Note 13 Pro','Redmi Note 13 Pro+',
+  'Redmi Note 14','Redmi Note 14 Pro',
+  'Redmi 4','Redmi 4A','Redmi 5','Redmi 5A','Redmi 6','Redmi 6A','Redmi 7','Redmi 7A',
+  'Redmi 8','Redmi 8A','Redmi 9','Redmi 9A','Redmi 9 Power','Redmi 10','Redmi 10A',
+  'Redmi 11 Prime','Redmi 12','Redmi 13','Redmi A1','Redmi A2','Redmi A3',
+  'Mi A1','Mi A2','Mi A3','Mi 5','Mi 6','Redmi Y1','Redmi Y2',
+  'Xiaomi Mi 9','Xiaomi Mi 10','Xiaomi Mi 11','Xiaomi 11 Lite','Xiaomi 12','Xiaomi 12 Pro',
+  'Xiaomi 13','Xiaomi 13 Pro','Xiaomi 14','Xiaomi 14 Pro','Xiaomi 14 Civi',
+  'Poco F1','Poco X2','Poco X3','Poco X3 Pro','Poco M2','Poco M3','Poco C3',
+  'Poco C65','Poco M6 Pro','Poco X5','Poco X5 Pro','Poco X6','Poco X6 Pro','Poco X7','Poco X7 Pro',
+  'Poco F5','Poco F6','Poco F6 Pro',
+  // Realme — spun off from Oppo in 2018
+  'Realme 1','Realme 2','Realme 2 Pro','Realme 3','Realme 3 Pro','Realme 5','Realme 5 Pro',
+  'Realme 5s','Realme 6','Realme 6 Pro','Realme 7','Realme 7 Pro','Realme 8','Realme 8 Pro',
+  'Realme 9','Realme 9 Pro','Realme 9 Pro+','Realme 10','Realme 10 Pro',
+  'Realme C1','Realme C2','Realme C11','Realme C12','Realme C21','Realme C25','Realme C30','Realme C33',
+  'Realme Narzo 10','Realme Narzo 20','Realme Narzo 30','Realme Narzo 50','Realme Narzo 60','Realme Narzo 70',
+  'Realme 11 Pro','Realme 11 Pro+','Realme 12 Pro','Realme 12 Pro+',
+  'Realme 13 Pro','Realme 13 Pro+','Realme GT 5','Realme GT 6',
+  // Vivo / iQOO — back to ~2016
+  'Vivo Y21','Vivo Y31','Vivo Y51','Vivo Y53','Vivo Y69','Vivo Y71','Vivo Y81','Vivo Y91',
+  'Vivo Y12','Vivo Y15','Vivo Y17','Vivo Y20','Vivo Y30','Vivo Y50',
+  'Vivo V5','Vivo V7','Vivo V9','Vivo V11','Vivo V15','Vivo V17','Vivo V19','Vivo V20',
+  'Vivo V21','Vivo V23','Vivo V25','Vivo V27','Vivo V29','Vivo V30','Vivo V30e','Vivo V40',
+  'Vivo Y100','Vivo Y200','Vivo X60','Vivo X70','Vivo X80','Vivo X90','Vivo X100','Vivo X200',
+  'iQOO 3','iQOO 7','iQOO 9','iQOO 11','iQOO 12','iQOO Z1','iQOO Z3','iQOO Z5','iQOO Z6',
+  'iQOO Z7','iQOO Z9','iQOO Neo 6','iQOO Neo 7','iQOO Neo 9','iQOO Neo 9 Pro',
+  // Oppo — back to ~2016
+  'Oppo A37','Oppo A57','Oppo A71','Oppo A83','Oppo F1','Oppo F1s','Oppo F3','Oppo F5',
+  'Oppo F7','Oppo F9','Oppo F11','Oppo F11 Pro','Oppo F15','Oppo F17','Oppo F19','Oppo F21',
+  'Oppo A5','Oppo A5s','Oppo A7','Oppo A9','Oppo A11k','Oppo A12','Oppo A15','Oppo A31',
+  'Oppo A52','Oppo A53','Oppo A54','Oppo A55','Oppo A56','Oppo A57','Oppo A74','Oppo A76',
+  'Oppo A77','Oppo A78','Oppo A79','Oppo Reno','Oppo Reno 2','Oppo Reno 3','Oppo Reno 4',
+  'Oppo Reno 5','Oppo Reno 6','Oppo Reno 7','Oppo Reno 8','Oppo Reno 10','Oppo Reno 11',
+  'Oppo Reno 12','Oppo Find X','Oppo Find X2','Oppo Find X3','Oppo Find X5','Oppo Find X7',
+  // Motorola — back to ~2015 (Moto G3/E2, Moto X)
+  'Moto G (3rd Gen)','Moto E2','Moto X Style','Moto G4','Moto G4 Plus','Moto G5','Moto G5 Plus',
+  'Moto G5s','Moto G6','Moto G6 Plus','Moto G7','Moto G7 Power','Moto G8','Moto G8 Power',
+  'Moto G9','Moto G9 Power','Moto G10','Moto G20','Moto G30','Moto G40','Moto G50','Moto G60',
+  'Moto G54','Moto G64','Moto G84','Moto Edge 20','Moto Edge 30','Moto Edge 40',
+  'Moto Edge 50','Moto Edge 50 Pro','Moto Edge 50 Fusion','Moto E4','Moto E5','Moto E6','Moto E7',
+  // Nothing / CMF
+  'Nothing Phone (1)','Nothing Phone (2)','Nothing Phone (2a)','Nothing Phone (2a) Special Edition',
+  'Nothing Phone (2a) Plus','Nothing Phone (3)','Nothing Phone (3a)','Nothing Phone (3a) Lite',
+  'Nothing Phone (3a) Pro','Nothing Phone (4a)','Nothing Phone (4a) Pro','Nothing Phone (4b)',
+  'CMF Phone 1','CMF Phone 2 Pro',
+  // Infinix / Tecno
+  'Infinix Hot 8','Infinix Hot 9','Infinix Hot 10','Infinix Hot 40',
+  'Infinix Note 8','Infinix Note 10','Infinix Note 40','Infinix Zero 8','Infinix Zero 40',
+  'Tecno Spark 5','Tecno Spark 8','Tecno Spark 20','Tecno Camon 12','Tecno Camon 30','Tecno Pova 6',
+  // Older Indian-market budget brands (still common in field surveys)
+  'Micromax Canvas','Micromax Bolt','Micromax Yu Yureka','Lava Iris','Lava Z61','Karbonn Titanium',
+  'Nokia 6.1','Nokia 5.1 Plus','Nokia 6.2','Nokia G21','Nokia G42','Asus Zenfone Max','Asus Zenfone 5'
+];
+
+function normalizeModel(s) {
+  return (s||'').trim().replace(/\s+/g,' ').toLowerCase();
+}
+
+// Every known model (seed + anything surveyors have typed before), deduped.
+function allKnownModels() {
+  var custom = JSON.parse(localStorage.getItem('fp_custom_models') || '[]');
+  var seen = {}, out = [];
+  SEED_MODELS.concat(custom).forEach(function(m){
+    var k = normalizeModel(m);
+    if (!k || seen[k]) return;
+    seen[k] = true; out.push(m);
+  });
+  return out;
+}
+
+// If `name` matches an existing model (case/whitespace-insensitive), return
+// that exact existing string so we always reuse one canonical spelling
+// instead of saving near-duplicates like "redmi note 5" vs "Redmi Note 5".
+function canonicalizeModel(name) {
+  var key = normalizeModel(name);
+  var match = allKnownModels().find(function(m){ return normalizeModel(m) === key; });
+  return match || name.trim().replace(/\s+/g,' ');
+}
+
+// Persists a genuinely new model to fp_custom_models. Returns the canonical
+// string to actually use (existing match if one was found, otherwise the
+// cleaned-up new value) — callers should use the return value, not `name`.
+function saveCustomModel(name) {
+  if (!name) return name;
+  var canon = canonicalizeModel(name);
+  var key = normalizeModel(canon);
+  var custom = JSON.parse(localStorage.getItem('fp_custom_models') || '[]');
+  var alreadyKnown = SEED_MODELS.concat(custom).some(function(m){ return normalizeModel(m) === key; });
+  if (!alreadyKnown) {
+    custom.push(canon);
+    localStorage.setItem('fp_custom_models', JSON.stringify(custom));
+  }
+  return canon;
+}
+
+function preselectLastModel() {
+  var last = localStorage.getItem('fp_last_model');
+  if (last) document.getElementById('l-model').value = last;
+}
+
+// Fuzzy-ish match: every whitespace-separated token the user typed must
+// appear as a substring somewhere in the candidate (in any order), so
+// "note 13 pro" matches "Redmi Note 13 Pro" without needing exact prefix order.
+function matchesQuery(candidate, query) {
+  var c = normalizeModel(candidate);
+  var tokens = normalizeModel(query).split(' ').filter(Boolean);
+  return tokens.every(function(t){ return c.indexOf(t) !== -1; });
+}
+
+function onModelInput() {
+  var input = document.getElementById('l-model');
+  var box   = document.getElementById('l-model-suggestions');
+  var q = input.value.trim();
+  var pool = allKnownModels();
+  var matches = q
+    ? pool.filter(function(m){ return matchesQuery(m, q); }).slice(0, 8)
+    : pool.slice(0, 8);
+  if (!matches.length) { box.style.display='none'; box.innerHTML=''; return; }
+  box.innerHTML = matches.map(function(m){
+    return '<div onmousedown="event.preventDefault();selectModel(\''
+      + m.replace(/'/g,"\\'") + '\')" style="padding:9px 12px;cursor:pointer;font-size:14px;'
+      + 'border-bottom:1px solid rgba(255,255,255,0.06);">' + m + '</div>';
+  }).join('');
+  box.style.display = 'block';
+}
+function selectModel(m) {
+  document.getElementById('l-model').value = m;
+  hideModelSuggestions();
+}
+function hideModelSuggestions() {
+  document.getElementById('l-model-suggestions').style.display = 'none';
 }
 
 var _knownName = null; // set by checkReturningSurveyor() when this email is already on file
@@ -1041,15 +1205,16 @@ function doLogin() {
   var phone  = document.getElementById('l-phone').value.trim();
   var email  = document.getElementById('l-email').value.trim();
   var height = parseFloat(document.getElementById('l-height').value);
-  var model  = document.getElementById('l-model').value;
-  if (model === 'custom') model = document.getElementById('l-model-custom').value.trim();
-
+  var model  = document.getElementById('l-model').value.trim();
 
   if (!name)  { showToast('Enter your name','error'); return; }
   if (!phone) { showToast('Enter phone number','error'); return; }
   if (!email || email.indexOf('@') === -1) { showToast('Enter a valid email','error'); return; }
   if (!height || height < 100 || height > 230) { showToast('Enter your height in cm, e.g. 170','error'); return; }
-  if (!model) { showToast('Select phone model','error'); return; }
+  if (!model) { showToast('Enter phone model','error'); return; }
+
+  model = saveCustomModel(model);
+  localStorage.setItem('fp_last_model', model);
 
   U = { name, phone, email, model, heightCM: height, eyeH: computeEyeHFromHeightCM(height) };
   localStorage.setItem('fp_user', JSON.stringify(U));
@@ -3011,12 +3176,12 @@ setInterval(function() {
 }, 45 * 60 * 1000);
 
 (function init(){
+  preselectLastModel();
   var saved=localStorage.getItem('fp_user');
   if(saved){
     try{
       var u=JSON.parse(saved);
-      // Clear bad session where model was literally "Other (type below)"
-      if(!u.model || u.model==='Other (type below)' || u.model==='custom'){
+      if(!u.model){
         localStorage.removeItem('fp_user');
       } else {
         U=u; startMain();
