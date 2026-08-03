@@ -733,7 +733,47 @@ td.hi{color:white;font-weight:700;}
       <div class="cal-steps">
         <div class="cal-step"><div class="step-num">1</div>Turn your phone to <strong style="color:var(--text);">portrait</strong> orientation — the app's perspective math assumes a portrait photo.</div>
         <div class="cal-step"><div class="step-num">2</div>Lay a sheet of A4 paper flat on the ground, <strong style="color:var(--text);">across the footpath</strong> (perpendicular to the direction you're walking), roughly in the lower-middle of the frame.</div>
-        <div class="cal-step"><div class="step-num">3</div>For best accuracy, <strong style="color:var(--text);">stack 3-4 sheets front-to-back</strong> (in the direction you're walking, not side-by-side) instead of just one — tap the outer corners of the whole stack in the next step. This makes the two long edges longer, which makes the calibration far less sensitive to exactly where you tap.</div>
+        <div class="cal-step">
+          <div class="step-num">3</div>
+          <div>
+            For best accuracy, <strong style="color:var(--text);">line up 3-4 sheets front-to-back</strong> (in the direction you're walking, not side-by-side) instead of just one, taping each sheet's long edge to the next sheet's long edge so they form one continuous strip — then tap the outer corners of the whole strip in the next step. This makes the two side edges you tap much longer, which makes the calibration far less sensitive to exactly where you tap. A gap opening between sheets undoes the benefit, so keep them flush.
+            <div style="background:var(--surface);border-radius:var(--r);padding:12px;border:1px solid var(--border);margin-top:10px;">
+              <svg viewBox="0 0 220 260" width="100%" style="max-width:200px;display:block;margin:0 auto;">
+                <text x="110" y="14" font-size="10" font-weight="700" fill="var(--muted)" text-anchor="middle">↑ toward horizon</text>
+
+                <!-- 4 sheets, front-to-back -->
+                <rect x="40" y="40"  width="140" height="35" fill="#101a2c" stroke="#f0f4f8" stroke-width="1.5"/>
+                <rect x="40" y="75"  width="140" height="35" fill="#0c1220" stroke="#f0f4f8" stroke-width="1.5"/>
+                <rect x="40" y="110" width="140" height="35" fill="#101a2c" stroke="#f0f4f8" stroke-width="1.5"/>
+                <rect x="40" y="145" width="140" height="35" fill="#0c1220" stroke="#f0f4f8" stroke-width="1.5"/>
+
+                <!-- tape seams: each sheet's long edge taped to the next -->
+                <line x1="40" y1="75"  x2="180" y2="75"  stroke="#e879f9" stroke-width="4" stroke-dasharray="6,3"/>
+                <line x1="40" y1="110" x2="180" y2="110" stroke="#e879f9" stroke-width="4" stroke-dasharray="6,3"/>
+                <line x1="40" y1="145" x2="180" y2="145" stroke="#e879f9" stroke-width="4" stroke-dasharray="6,3"/>
+                <text x="185" y="79"  font-size="9" font-weight="700" fill="#e879f9">tape</text>
+                <text x="185" y="114" font-size="9" font-weight="700" fill="#e879f9">tape</text>
+                <text x="185" y="149" font-size="9" font-weight="700" fill="#e879f9">tape</text>
+
+                <!-- outer corners you actually tap -->
+                <circle cx="40"  cy="40"  r="3.5" fill="#f59e0b"/>
+                <circle cx="180" cy="40"  r="3.5" fill="#f59e0b"/>
+                <circle cx="180" cy="180" r="3.5" fill="#f59e0b"/>
+                <circle cx="40"  cy="180" r="3.5" fill="#f59e0b"/>
+                <text x="30"  y="34"  font-size="9" font-weight="800" fill="#f59e0b" text-anchor="end">TL</text>
+                <text x="190" y="34"  font-size="9" font-weight="800" fill="#f59e0b" text-anchor="start">TR</text>
+                <text x="190" y="192" font-size="9" font-weight="800" fill="#f59e0b" text-anchor="start">BR</text>
+                <text x="30"  y="192" font-size="9" font-weight="800" fill="#f59e0b" text-anchor="end">BL</text>
+
+                <text x="110" y="206" font-size="10" font-weight="700" fill="var(--muted)" text-anchor="middle">↓ toward you (camera)</text>
+
+                <!-- dimensions -->
+                <text x="110" y="26" font-size="9" fill="var(--muted)" text-anchor="middle">297mm wide (unchanged)</text>
+                <text x="14" y="112" font-size="9" fill="var(--muted)" text-anchor="middle" transform="rotate(-90 14 112)">4 × 210mm = 840mm</text>
+              </svg>
+            </div>
+          </div>
+        </div>
         <div class="cal-step"><div class="step-num">4</div>Take the photo with all 4 corners of the sheet (or stack) clearly visible, then tap "Start Marking" and tap the corners in order: top-left, top-right, bottom-right, bottom-left.</div>
       </div>
 
